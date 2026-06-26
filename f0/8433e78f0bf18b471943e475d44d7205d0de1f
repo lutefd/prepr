@@ -1,0 +1,21 @@
+test/diff-schema.test.ts
+  s_b82506a15219f7::t_b66c2aa9d62e7b 122-126
+src/core/schema.ts
+  s_b82506a15219f7::t_b66c2aa9d62e7b 32,36,74,85-87,106,116,120-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "f08433e78f0bf18b471943e475d44d7205d0de1f",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
