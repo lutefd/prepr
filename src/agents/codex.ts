@@ -64,7 +64,7 @@ export async function runCodexProcess(input: string, timeoutMs: number): Promise
 function extractFinalJson(stdout: string): string {
   const trimmed = stdout.trim();
   const lines = trimmed.split(/\r?\n/).filter(Boolean);
-  for (const line of lines.toReversed()) {
+  for (const line of [...lines].reverse()) {
     try {
       const event = JSON.parse(line) as Record<string, unknown>;
       for (const key of ["response", "message", "content", "output", "final"]) {

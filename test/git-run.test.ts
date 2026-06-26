@@ -11,6 +11,7 @@ test("creates a no-agent review run from a temporary git repository", async () =
   await execFileText("git", ["init"], { cwd: repo });
   await execFileText("git", ["config", "user.email", "prepr@example.com"], { cwd: repo });
   await execFileText("git", ["config", "user.name", "prepr"], { cwd: repo });
+  await execFileText("git", ["config", "commit.gpgsign", "false"], { cwd: repo });
   await fs.writeFile(path.join(repo, "app.ts"), "export const value = 1;\n");
   await execFileText("git", ["add", "app.ts"], { cwd: repo });
   await execFileText("git", ["commit", "-m", "initial"], { cwd: repo });

@@ -70,12 +70,13 @@ export function validateCandidate(value: unknown): FindingCandidate {
     category: enumValue(value.category, categories, "category"),
     confidence: enumValue(value.confidence, confidences, "confidence"),
     location: {
-      file: normalizeCandidatePath(requiredString(value.location.file, "location.file")),
+      file: requiredString(value.location.file, "location.file"),
       line: typeof value.location.line === "number" && Number.isFinite(value.location.line) ? Math.max(1, Math.floor(value.location.line)) : undefined
     },
     suggestion: typeof value.suggestion === "string" ? value.suggestion : undefined
   };
   validateRepoPath(candidate.location.file);
+  candidate.location.file = normalizeCandidatePath(candidate.location.file);
   return candidate;
 }
 
@@ -92,6 +93,8 @@ export function normalizeFindings(
   const seen = new Set<string>();
   const findings: ReviewFinding[] = [];
   for (const candidate of candidates) {
+    validateRepoPath(candidate.location.file);
+    candidate.location.file = normalizeCandidatePath(candidate.location.file);
     const file = findDiffFile(diff, candidate.location.file);
     if (!file) continue;
     const line = nearestChangedNewLine(file, candidate.location.line);
@@ -124,9 +127,10 @@ export function reconcileFindings(previous: ReviewFinding[], current: ReviewFind
   return [
     ...current.map((finding) => {
       const prior = previous.find((p) => p.fingerprint === finding.fingerprint);
+      const status: ReviewFinding["status"] = dismissedFingerprints.has(finding.fingerprint) || prior?.status === "dismissed" ? "dismissed" : "open";
       return {
         ...finding,
-        status: dismissedFingerprints.has(finding.fingerprint) ? "dismissed" : prior?.status === "dismissed" ? "dismissed" : "open",
+        status,
         isNew: !prior
       };
     }),
