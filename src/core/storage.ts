@@ -59,6 +59,7 @@ export async function loadRun(repoRoot: string, id?: string): Promise<ReviewRun>
     diff: await readJson(path.join(runDir, "diff.json")),
     findings: await readJson(path.join(runDir, "findings.json")),
     summary: await fs.readFile(path.join(runDir, "summary.md"), "utf8"),
+    coverage: await readJson<ReviewRun["coverage"]>(path.join(runDir, "coverage.json")).catch(() => undefined),
     uiState: (await readJson<Record<string, unknown>>(path.join(runDir, "ui-state.json")).catch(() => ({})))
   };
 }

@@ -7,6 +7,7 @@ import { writeExports } from "./export.js";
 import { ensureLocalExclude, rawDiff, requireCleanTree, resolveRefs, resolveRepoRoot } from "./git.js";
 import { normalizeFindings, reconcileFindings } from "./schema.js";
 import { createRunDir, readDismissedFingerprints, runId, saveRun } from "./storage.js";
+import { runReviewWorkflow } from "./workflow.js";
 
 export interface CreateRunOptions {
   cwd?: string;
@@ -42,10 +43,10 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
   });
   const dismissed = await readDismissedFingerprints(repoRoot);
   const fixed = new Set((options.previous ?? []).filter((f) => f.status === "fixed").map((f) => f.fingerprint));
-  const agentResult = options.runner
-    ? await options.runner.run(bundle)
-    : { summary: "Agent disabled. Review bundle generated for inspection.", findings: [], raw: JSON.stringify({ summary: "Agent disabled.", findings: [] }), log: "" };
-  const candidates = options.only?.length ? agentResult.findings.filter((f) => options.only?.includes(f.category)) : agentResult.findings;
+  const workflow = options.runner
+    ? await runReviewWorkflow({ runner: options.runner, bundle, workspace: repoRoot, previous: options.previous })
+    : disabledWorkflow(diff);
+  const candidates = options.only?.length ? workflow.findings.filter((f) => options.only?.includes(f.category)) : workflow.findings;
   let findings = normalizeFindings(candidates, diff, {
     agent: options.agentName === "codex" ? "codex" : "none",
     createdAt,
@@ -74,19 +75,42 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
     metadata,
     diff,
     findings,
-    summary: agentResult.summary,
+    summary: workflow.verification.summary,
+    coverage: workflow.coverage,
     uiState: {}
   };
   await saveRun(paths, run, {
     "patch.diff": patch,
     "bundle.md": bundle,
     "supplemental-context.json": supplemental,
-    "findings.raw.json": agentResult.raw,
-    "agent.log": agentResult.log,
+    "scan-output.json": workflow.scan,
+    "verify-output.json": workflow.verification,
+    "suppressed-findings.json": workflow.suppressed,
+    "coverage.json": workflow.coverage,
+    "agent.log": workflow.log,
     "logs.json": { createdAt, agent: options.agentName }
   });
   await writeExports(paths.runDir, run);
   return { run, runDir: paths.runDir };
+}
+
+function disabledWorkflow(diff: ReviewRun["diff"]): Awaited<ReturnType<typeof runReviewWorkflow>> {
+  const coverage = {
+    reviewedFiles: diff.map((file) => file.newPath),
+    reviewedHunks: diff.reduce((count, file) => count + file.hunks.length, 0),
+    exploredSymbols: [],
+    checks: [],
+    skippedContext: ["Agent review disabled"],
+    notes: ["Diff bundle generated without an agent scan or verification pass."]
+  };
+  return {
+    scan: { schemaVersion: 1, summary: "Agent disabled.", candidates: [], coverage },
+    verification: { schemaVersion: 1, summary: "Agent disabled. Review bundle generated for inspection.", decisions: [], coverage },
+    findings: [],
+    suppressed: [],
+    coverage,
+    log: ""
+  };
 }
 
 export function countFindings(files: number, findings: ReviewFinding[]) {

@@ -25,7 +25,8 @@ index 111..222 100644
     severity: "medium",
     category: "bug",
     confidence: "high",
-    location: { file: "src/a.ts", line: 1 }
+    location: { file: "src/a.ts", line: 1 },
+    evidence: [{ kind: "diff", explanation: "The changed value is visible in the diff.", file: "src/a.ts", lineStart: 2 }]
   };
   const findings = normalizeFindings([candidate, candidate], diff, {
     agent: "codex",
@@ -48,7 +49,8 @@ test("rejects escaping candidate paths", () => {
             severity: "high",
             category: "security",
             confidence: "high",
-            location: { file: "../secret", line: 1 }
+            location: { file: "../secret", line: 1 },
+            evidence: [{ kind: "diff", explanation: "Invalid path evidence.", file: "../secret" }]
           }
         ],
         [],

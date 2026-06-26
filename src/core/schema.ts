@@ -1,6 +1,20 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import type { DiffFile, FindingCandidate, FindingCategory, FindingConfidence, FindingSeverity, ReviewFinding } from "../shared/types.js";
+import type {
+  CoverageReceipt,
+  DiffFile,
+  EvidenceKind,
+  EvidenceRef,
+  FindingCandidate,
+  FindingCategory,
+  FindingConfidence,
+  FindingSeverity,
+  ReviewFinding,
+  ScanResult,
+  VerificationDecision,
+  VerificationResult,
+  VerificationVerdict
+} from "../shared/types.js";
 import { findDiffFile, nearestChangedNewLine } from "./diff.js";
 import { PreprError } from "./errors.js";
 import { validateRepoPath } from "./git.js";
@@ -9,53 +23,134 @@ export const severities = ["critical", "high", "medium", "low", "info"] as const
 export const categories = ["bug", "security", "performance", "maintainability", "test", "docs", "style"] as const satisfies readonly FindingCategory[];
 export const confidences = ["high", "medium", "low"] as const satisfies readonly FindingConfidence[];
 
-export const codexJsonSchema = {
+const evidenceSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["findings", "summary"],
+  required: ["kind", "explanation"],
   properties: {
+    kind: { enum: ["diff", "base_file", "head_file", "check", "command"] },
+    explanation: { type: "string" },
+    file: { type: "string" },
+    ref: { type: "string" },
+    side: { enum: ["base", "head"] },
+    lineStart: { type: "number" },
+    lineEnd: { type: "number" },
+    checkId: { type: "string" },
+    commandId: { type: "string" },
+    excerpt: { type: "string" }
+  }
+} as const;
+
+const coverageSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["reviewedFiles", "reviewedHunks", "exploredSymbols", "checks", "skippedContext", "notes"],
+  properties: {
+    reviewedFiles: { type: "array", items: { type: "string" } },
+    reviewedHunks: { type: "number" },
+    exploredSymbols: { type: "array", items: { type: "string" } },
+    checks: { type: "array", items: { type: "string" } },
+    skippedContext: { type: "array", items: { type: "string" } },
+    notes: { type: "array", items: { type: "string" } }
+  }
+} as const;
+
+const locationSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["file"],
+  properties: {
+    file: { type: "string" },
+    line: { type: "number" }
+  }
+} as const;
+
+export const scanJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["schemaVersion", "summary", "candidates", "coverage"],
+  properties: {
+    schemaVersion: { const: 1 },
     summary: { type: "string" },
-    findings: {
+    candidates: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["title", "claim", "severity", "category", "confidence", "location"],
+        required: ["title", "claim", "severity", "category", "confidence", "location", "evidence"],
         properties: {
           title: { type: "string" },
           claim: { type: "string" },
           severity: { enum: severities },
           category: { enum: categories },
           confidence: { enum: confidences },
-          location: {
-            type: "object",
-            additionalProperties: false,
-            required: ["file"],
-            properties: {
-              file: { type: "string" },
-              line: { type: "number" }
-            }
-          },
+          location: locationSchema,
+          impact: { type: "string" },
+          trigger: { type: "string" },
+          evidence: { type: "array", items: evidenceSchema },
+          counterEvidence: { type: "array", items: { type: "string" } },
           suggestion: { type: "string" }
         }
       }
-    }
+    },
+    coverage: coverageSchema
   }
 };
 
-export function parseAgentResponse(raw: string): { summary: string; findings: FindingCandidate[] } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    throw new PreprError(`Agent returned malformed JSON: ${(error as Error).message}`, "MALFORMED_AGENT_OUTPUT");
+export const verificationJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["schemaVersion", "summary", "decisions", "coverage"],
+  properties: {
+    schemaVersion: { const: 1 },
+    summary: { type: "string" },
+    decisions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["candidateId", "verdict", "rationale", "confidence", "evidence"],
+        properties: {
+          candidateId: { type: "string" },
+          verdict: { enum: ["confirmed", "rejected", "uncertain"] },
+          rationale: { type: "string" },
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+          evidence: { type: "array", items: evidenceSchema },
+          severity: { enum: severities },
+          category: { enum: categories },
+          location: locationSchema,
+          suggestion: { type: "string" },
+          relatedPreviousFindingId: { type: "string" }
+        }
+      }
+    },
+    coverage: coverageSchema
   }
-  if (!isRecord(parsed) || typeof parsed.summary !== "string" || !Array.isArray(parsed.findings)) {
-    throw new PreprError("Agent JSON must contain { summary, findings }.", "MALFORMED_AGENT_OUTPUT");
+};
+
+export function parseScanResponse(raw: string): ScanResult {
+  const parsed = parseJson(raw);
+  if (!isRecord(parsed) || parsed.schemaVersion !== 1 || typeof parsed.summary !== "string" || !Array.isArray(parsed.candidates)) {
+    throw new PreprError("Scan JSON must contain { schemaVersion: 1, summary, candidates, coverage }.", "MALFORMED_AGENT_OUTPUT");
   }
   return {
+    schemaVersion: 1,
     summary: parsed.summary,
-    findings: parsed.findings.map(validateCandidate)
+    candidates: parsed.candidates.map((value, index) => ({ ...validateCandidate(value), candidateId: `candidate-${String(index + 1).padStart(3, "0")}` })),
+    coverage: validateCoverage(parsed.coverage)
+  };
+}
+
+export function parseVerificationResponse(raw: string): VerificationResult {
+  const parsed = parseJson(raw);
+  if (!isRecord(parsed) || parsed.schemaVersion !== 1 || typeof parsed.summary !== "string" || !Array.isArray(parsed.decisions)) {
+    throw new PreprError("Verification JSON must contain { schemaVersion: 1, summary, decisions, coverage }.", "MALFORMED_AGENT_OUTPUT");
+  }
+  return {
+    schemaVersion: 1,
+    summary: parsed.summary,
+    decisions: parsed.decisions.map(validateVerificationDecision),
+    coverage: validateCoverage(parsed.coverage)
   };
 }
 
@@ -73,11 +168,77 @@ export function validateCandidate(value: unknown): FindingCandidate {
       file: requiredString(value.location.file, "location.file"),
       line: typeof value.location.line === "number" && Number.isFinite(value.location.line) ? Math.max(1, Math.floor(value.location.line)) : undefined
     },
+    impact: optionalString(value.impact),
+    trigger: optionalString(value.trigger),
+    evidence: validateEvidenceList(value.evidence),
+    counterEvidence: optionalStringList(value.counterEvidence, "counterEvidence"),
     suggestion: typeof value.suggestion === "string" ? value.suggestion : undefined
   };
   validateRepoPath(candidate.location.file);
   candidate.location.file = normalizeCandidatePath(candidate.location.file);
   return candidate;
+}
+
+function validateVerificationDecision(value: unknown): VerificationDecision {
+  if (!isRecord(value)) throw new PreprError("Verification decision is malformed.", "MALFORMED_VERIFICATION");
+  const location = value.location === undefined ? undefined : validateLocation(value.location);
+  return {
+    candidateId: requiredString(value.candidateId, "candidateId"),
+    verdict: enumValue(value.verdict, ["confirmed", "rejected", "uncertain"] as const satisfies readonly VerificationVerdict[], "verdict"),
+    rationale: requiredString(value.rationale, "rationale"),
+    confidence: boundedNumber(value.confidence, "confidence", 0, 1),
+    evidence: validateEvidenceList(value.evidence),
+    severity: value.severity === undefined ? undefined : enumValue(value.severity, severities, "severity"),
+    category: value.category === undefined ? undefined : enumValue(value.category, categories, "category"),
+    location,
+    suggestion: optionalString(value.suggestion),
+    relatedPreviousFindingId: optionalString(value.relatedPreviousFindingId)
+  };
+}
+
+function validateLocation(value: unknown): FindingCandidate["location"] {
+  if (!isRecord(value)) throw new PreprError("Finding location is malformed.", "MALFORMED_FINDING");
+  const file = normalizeCandidatePath(requiredString(value.file, "location.file"));
+  validateRepoPath(file);
+  return {
+    file,
+    line: value.line === undefined ? undefined : Math.max(1, Math.floor(boundedNumber(value.line, "location.line", 1, Number.MAX_SAFE_INTEGER)))
+  };
+}
+
+function validateEvidenceList(value: unknown): EvidenceRef[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new PreprError("Every finding or decision requires at least one evidence reference.", "MALFORMED_EVIDENCE");
+  }
+  return value.map((entry) => {
+    if (!isRecord(entry)) throw new PreprError("Evidence reference is malformed.", "MALFORMED_EVIDENCE");
+    const file = optionalString(entry.file);
+    if (file) validateRepoPath(file);
+    return {
+      kind: enumValue(entry.kind, ["diff", "base_file", "head_file", "check", "command"] as const satisfies readonly EvidenceKind[], "evidence.kind"),
+      explanation: requiredString(entry.explanation, "evidence.explanation"),
+      file: file ? normalizeCandidatePath(file) : undefined,
+      ref: optionalString(entry.ref),
+      side: entry.side === undefined ? undefined : enumValue(entry.side, ["base", "head"] as const, "evidence.side"),
+      lineStart: optionalPositiveInteger(entry.lineStart, "evidence.lineStart"),
+      lineEnd: optionalPositiveInteger(entry.lineEnd, "evidence.lineEnd"),
+      checkId: optionalString(entry.checkId),
+      commandId: optionalString(entry.commandId),
+      excerpt: optionalString(entry.excerpt)
+    };
+  });
+}
+
+function validateCoverage(value: unknown): CoverageReceipt {
+  if (!isRecord(value)) throw new PreprError("Coverage receipt is malformed.", "MALFORMED_COVERAGE");
+  return {
+    reviewedFiles: stringList(value.reviewedFiles, "coverage.reviewedFiles").map(normalizeCandidatePath),
+    reviewedHunks: Math.floor(boundedNumber(value.reviewedHunks, "coverage.reviewedHunks", 0, Number.MAX_SAFE_INTEGER)),
+    exploredSymbols: stringList(value.exploredSymbols, "coverage.exploredSymbols"),
+    checks: stringList(value.checks, "coverage.checks"),
+    skippedContext: stringList(value.skippedContext, "coverage.skippedContext"),
+    notes: stringList(value.notes, "coverage.notes")
+  };
 }
 
 export function normalizeFindings(
@@ -171,4 +332,39 @@ function requiredString(value: unknown, field: string): string {
 function enumValue<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
   if (typeof value === "string" && (allowed as readonly string[]).includes(value)) return value as T;
   throw new PreprError(`Finding field ${field} must be one of: ${allowed.join(", ")}.`, "MALFORMED_FINDING");
+}
+
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new PreprError(`Agent returned malformed JSON: ${(error as Error).message}`, "MALFORMED_AGENT_OUTPUT");
+  }
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function stringList(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new PreprError(`${field} must be an array of strings.`, "MALFORMED_AGENT_OUTPUT");
+  }
+  return value.map((item) => (item as string).trim()).filter(Boolean);
+}
+
+function optionalStringList(value: unknown, field: string): string[] | undefined {
+  return value === undefined ? undefined : stringList(value, field);
+}
+
+function boundedNumber(value: unknown, field: string, minimum: number, maximum: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) {
+    throw new PreprError(`${field} must be a number between ${minimum} and ${maximum}.`, "MALFORMED_AGENT_OUTPUT");
+  }
+  return value;
+}
+
+function optionalPositiveInteger(value: unknown, field: string): number | undefined {
+  if (value === undefined) return undefined;
+  return Math.floor(boundedNumber(value, field, 1, Number.MAX_SAFE_INTEGER));
 }
