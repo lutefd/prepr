@@ -1,0 +1,40 @@
+src/shared/types.ts
+  s_b82506a15219f7::t_364a477aab0ea6 167
+  s_b82506a15219f7::t_e3ec83e170b5d8 12-36,50-53,57-101
+  s_b82506a15219f7::t_9c343ccbcfef16 102
+src/agents/codex.ts
+  s_b82506a15219f7::t_67fdbcc8ace391 2,4-5,10,12-18,20-38,42-48,50,84-85
+src/core/run.ts
+  s_b82506a15219f7::t_364a477aab0ea6 10,46-49,78-79,86-90,97-113
+  s_b82506a15219f7::t_f71c889f7f0bf2 114-115
+test/workflow.test.ts
+  s_b82506a15219f7::t_9e1860a946239b 1-97
+test/diff-schema.test.ts
+  s_b82506a15219f7::t_9e1860a946239b 28-29,52-53
+src/core/schema.ts
+  s_b82506a15219f7::t_1c2e25b237df65 3-17,26,29,31-73,75,80,87-91,95-96,100-127,129-134,137,139-153,171-174,182-241
+  s_b82506a15219f7::t_674eaf5a888d0c 242,336-370
+  s_b82506a15219f7::t_4d2cb78b24c9b1 243
+src/core/workflow.ts
+  s_b82506a15219f7::t_f395408bb767cf 1-108
+src/agents/runner.ts
+  s_b82506a15219f7::t_e3ec83e170b5d8 1,3-4,10-16
+src/core/storage.ts
+  s_b82506a15219f7::t_364a477aab0ea6 62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "3e2656a75f4bb6ac816249a047e326daba0c8747",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
