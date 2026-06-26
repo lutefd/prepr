@@ -1,0 +1,25 @@
+src/core/errors.ts
+  s_b82506a15219f7::t_4911df1317c072 2-5,7-8
+package.json
+  s_b82506a15219f7::t_a2bc608b80e058 18
+test/ts-loader.mjs
+  s_b82506a15219f7::t_9f49454f4ee67c 1-12
+src/agents/codex.ts
+  s_b82506a15219f7::t_4911df1317c072 8-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "7d4c1d83080b85c490798e6b788b17289db90527",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
