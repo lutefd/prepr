@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { parseScanResponse, parseVerificationResponse, scanJsonSchema, verificationJsonSchema } from "../core/schema.js";
 import { PreprError } from "../core/errors.js";
 import type { ScanResult, VerificationResult } from "../shared/types.js";
@@ -6,9 +8,11 @@ import type { AgentRunner, AgentStageResult } from "./runner.js";
 
 export class CodexRunner implements AgentRunner {
   private readonly timeoutMs: number;
+  private readonly command: string;
 
-  constructor(timeoutMs = 10 * 60 * 1000) {
+  constructor(timeoutMs = 10 * 60 * 1000, command = "codex") {
     this.timeoutMs = timeoutMs;
+    this.command = command;
   }
 
   async runScan(input: Parameters<AgentRunner["runScan"]>[0]): Promise<AgentStageResult<ScanResult>> {
@@ -21,7 +25,7 @@ export class CodexRunner implements AgentRunner {
       JSON.stringify(scanJsonSchema),
       input.bundle
     ].join("\n\n");
-    return runCodexProcess(prompt, this.timeoutMs, input.workspace, parseScanResponse);
+    return runCodexProcess(prompt, this.timeoutMs, input.workspace, parseScanResponse, scanJsonSchema, "scan", this.command);
   }
 
   async runVerification(input: Parameters<AgentRunner["runVerification"]>[0]): Promise<AgentStageResult<VerificationResult>> {
@@ -39,7 +43,7 @@ export class CodexRunner implements AgentRunner {
       "## Review bundle",
       input.bundle
     ].join("\n\n");
-    return runCodexProcess(prompt, this.timeoutMs, input.workspace, parseVerificationResponse);
+    return runCodexProcess(prompt, this.timeoutMs, input.workspace, parseVerificationResponse, verificationJsonSchema, "verify", this.command);
   }
 }
 
@@ -47,11 +51,30 @@ export async function runCodexProcess<T>(
   input: string,
   timeoutMs: number,
   workspace: string,
-  parse: (raw: string) => T
+  parse: (raw: string) => T,
+  schema: unknown,
+  stage: "scan" | "verify",
+  command = "codex"
 ): Promise<AgentStageResult<T>> {
-  const args = ["exec", "--sandbox", "read-only", "--json", "-C", workspace, "-"];
+  const schemaFile = path.join(workspace, `.prepr-${stage}-schema.json`);
+  const outputFile = path.join(workspace, `.prepr-${stage}-output.json`);
+  await fs.writeFile(schemaFile, `${JSON.stringify(schema, null, 2)}\n`);
+  const args = [
+    "exec",
+    "--ephemeral",
+    "--sandbox",
+    "read-only",
+    "--json",
+    "--output-schema",
+    schemaFile,
+    "--output-last-message",
+    outputFile,
+    "-C",
+    workspace,
+    "-"
+  ];
   return new Promise((resolve, reject) => {
-    const child = spawn("codex", args, { cwd: workspace, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(command, args, { cwd: workspace, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -59,6 +82,7 @@ export async function runCodexProcess<T>(
       if (!settled) {
         settled = true;
         child.kill("SIGTERM");
+        void cleanupOutputFiles(schemaFile, outputFile);
         reject(new PreprError("Codex review timed out after ten minutes.", "AGENT_TIMEOUT"));
       }
     }, timeoutMs);
@@ -74,22 +98,34 @@ export async function runCodexProcess<T>(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      void cleanupOutputFiles(schemaFile, outputFile);
       reject(new PreprError(`Unable to start Codex: ${error.message}`, "AGENT_START_FAILED"));
     });
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       if (code !== 0) {
+        await cleanupOutputFiles(schemaFile, outputFile);
         reject(new PreprError(`Codex exited with status ${code}. See agent.log for details.`, "AGENT_FAILED", { stdout, stderr }));
         return;
       }
-      const final = extractFinalJson(stdout);
-      const output = parse(final);
-      resolve({ output, raw: final, log: `${stdout}${stderr ? `\n[stderr]\n${stderr}` : ""}` });
+      try {
+        const final = await fs.readFile(outputFile, "utf8").catch(() => extractFinalJson(stdout));
+        const output = parse(final);
+        await cleanupOutputFiles(schemaFile, outputFile);
+        resolve({ output, raw: final, log: `${stdout}${stderr ? `\n[stderr]\n${stderr}` : ""}` });
+      } catch (error) {
+        await cleanupOutputFiles(schemaFile, outputFile);
+        reject(error);
+      }
     });
     child.stdin.end(input);
   });
+}
+
+async function cleanupOutputFiles(...files: string[]): Promise<void> {
+  await Promise.all(files.map((file) => fs.rm(file, { force: true }).catch(() => undefined)));
 }
 
 function extractFinalJson(stdout: string): string {
