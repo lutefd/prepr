@@ -1,0 +1,33 @@
+src/shared/types.ts
+  s_b82506a15219f7::t_005fdc495adb73 38-60
+src/core/checks.ts
+  s_b82506a15219f7::t_005fdc495adb73 1-84
+src/core/bundle.ts
+  s_b82506a15219f7::t_249d95a026cfb7 2-3,21,32,38,67-69,82-83
+test/git-run.test.ts
+  s_b82506a15219f7::t_b507643f95d826 22-35,49-53
+src/core/run.ts
+  s_b82506a15219f7::t_a77ff3f55716ae 5-6,13,36-97,101,106
+src/core/config.ts
+  s_b82506a15219f7::t_005fdc495adb73 1-56
+test/config-checks.test.ts
+  s_b82506a15219f7::t_b507643f95d826 1-33
+src/core/workspace.ts
+  s_b82506a15219f7::t_005fdc495adb73 1-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "95c733706d07bcb9f6822c53f86a2080c855f5b7",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
