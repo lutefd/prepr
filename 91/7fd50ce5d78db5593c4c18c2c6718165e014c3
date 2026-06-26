@@ -1,0 +1,23 @@
+src/cli/index.ts
+  s_b82506a15219f7::t_f2c64417c66ee6 9,32,59,95-101
+src/server/browser.ts
+  s_b82506a15219f7::t_f2c64417c66ee6 1-43
+test/browser.test.ts
+  s_b82506a15219f7::t_f2c64417c66ee6 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "917fd50ce5d78db5593c4c18c2c6718165e014c3",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
