@@ -1,0 +1,33 @@
+src/core/storage.ts
+  s_b82506a15219f7::t_93d8f8184c31de 3,63,68-71
+  s_b82506a15219f7::t_292ecd93542c4d 72-73
+src/core/run.ts
+  s_b82506a15219f7::t_21227ccc83523f 8,12,37-51,53,55,57,79,83-87,113-122,135,137-139,141
+  s_b82506a15219f7::t_cc328bf1c3b96a 80-82
+src/server/http.ts
+  s_b82506a15219f7::t_cc328bf1c3b96a 56
+test/git-run.test.ts
+  s_b82506a15219f7::t_cc328bf1c3b96a 46,55-56
+src/shared/types.ts
+  s_b82506a15219f7::t_93d8f8184c31de 16-27,214
+test/run-checkpoint.test.ts
+  s_b82506a15219f7::t_cc328bf1c3b96a 1-56
+src/core/workflow.ts
+  s_b82506a15219f7::t_93d8f8184c31de 2,9-11,25-29,31,33-34,41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "9c5704d57cade2f70c8adbba9fdf9e08ff7b75a6",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
