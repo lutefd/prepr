@@ -12,7 +12,7 @@
     RefreshCw,
     SplitSquareHorizontal,
     XCircle
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
   import type { DiffFile, DiffLine, ReviewFinding, RunMetadata } from "../../src/shared/types";
 
   let metadata: RunMetadata | undefined;
