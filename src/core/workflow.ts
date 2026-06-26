@@ -8,6 +8,7 @@ import type {
   VerificationDecision
 } from "../shared/types.js";
 import { PreprError } from "./errors.js";
+import { evidenceErrors, type EvidenceContext } from "./evidence.js";
 
 export const MINIMUM_CONFIDENCE = 0.8;
 
@@ -16,6 +17,7 @@ export async function runReviewWorkflow(input: {
   bundle: string;
   workspace: string;
   previous?: ReviewFinding[];
+  evidenceContext?: Omit<EvidenceContext, "agentLog">;
 }): Promise<ReviewWorkflowResult> {
   const scanStage = await input.runner.runScan({ bundle: input.bundle, workspace: input.workspace });
   const verificationStage = await input.runner.runVerification({
@@ -41,6 +43,16 @@ export async function runReviewWorkflow(input: {
     if (decision.confidence < MINIMUM_CONFIDENCE) {
       suppressed.push({ candidate, decision, reason: "low_confidence" });
       continue;
+    }
+    if (input.evidenceContext) {
+      const errors = await evidenceErrors(decision.evidence, {
+        ...input.evidenceContext,
+        agentLog: `${scanStage.log}\n${verificationStage.log}`
+      });
+      if (errors.length) {
+        suppressed.push({ candidate, decision, reason: "invalid_evidence", evidenceErrors: errors });
+        continue;
+      }
     }
     findings.push(applyDecision(candidate, decision));
   }

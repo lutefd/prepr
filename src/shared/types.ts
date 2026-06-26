@@ -112,7 +112,8 @@ export interface VerificationResult {
 export interface SuppressedCandidate {
   candidate: ScannedCandidate;
   decision?: VerificationDecision;
-  reason: "rejected" | "uncertain" | "low_confidence" | "missing_decision";
+  reason: "rejected" | "uncertain" | "low_confidence" | "missing_decision" | "invalid_evidence";
+  evidenceErrors?: string[];
 }
 
 export interface ReviewWorkflowResult {

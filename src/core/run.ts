@@ -53,7 +53,13 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
     const dismissals = await readDismissals(repoRoot);
     const fixed = new Set((options.previous ?? []).filter((f) => f.status === "fixed").map((f) => f.fingerprint));
     const workflow = options.runner
-      ? await runReviewWorkflow({ runner: options.runner, bundle, workspace, previous: options.previous })
+      ? await runReviewWorkflow({
+          runner: options.runner,
+          bundle,
+          workspace,
+          previous: options.previous,
+          evidenceContext: { repoRoot, baseSha: refs.mergeBaseSha, headSha: refs.headSha, diff, checks }
+        })
       : disabledWorkflow(diff, checks.map((check) => check.id));
     const candidates = options.only?.length ? workflow.findings.filter((f) => options.only?.includes(f.category)) : workflow.findings;
     let findings = normalizeFindings(candidates, diff, {
