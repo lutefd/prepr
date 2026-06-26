@@ -1,0 +1,34 @@
+src/shared/types.ts
+  s_b82506a15219f7::t_ab3930691c67a4 15,132,137-142
+  s_b82506a15219f7::t_97c17e1aff020f 143-144
+src/core/run.ts
+  s_b82506a15219f7::t_597e33b10ae9f3 11,53,62,65
+test/diff-schema.test.ts
+  s_b82506a15219f7::t_d852b6931ebc78 34,57
+  s_b82506a15219f7::t_0a346b4fba3005 62-108
+src/core/schema.ts
+  s_b82506a15219f7::t_ab3930691c67a4 5,251,268,278-279,286,294,305-320
+  s_b82506a15219f7::t_65cb91f00f7190 321
+ui/src/App.svelte
+  s_b82506a15219f7::t_daefed584cadc2 69-75,78
+src/core/storage.ts
+  s_b82506a15219f7::t_597e33b10ae9f3 3,93-95,98-101,103
+src/server/http.ts
+  s_b82506a15219f7::t_728756bc652a5b 5,8,23,62-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "134fea46a49dbc86ce92ec39c02cf1dd1c16dd0b",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
