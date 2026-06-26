@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #1f2328;
+  background: #f6f8fa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+.diff-grid {
+  grid-template-columns: minmax(3rem, auto) minmax(0, 1fr);
+}
+
+.side-grid {
+  grid-template-columns: minmax(3rem, auto) minmax(0, 1fr) minmax(3rem, auto) minmax(0, 1fr);
+}
