@@ -29,11 +29,11 @@ const evidenceSchema = {
   additionalProperties: false,
   required: ["kind", "explanation", "file", "ref", "side", "lineStart", "lineEnd", "checkId", "commandId", "excerpt"],
   properties: {
-    kind: { enum: ["diff", "base_file", "head_file", "check", "command"] },
+    kind: { type: "string", enum: ["diff", "base_file", "head_file", "check", "command"] },
     explanation: { type: "string" },
     file: { type: ["string", "null"] },
     ref: { type: ["string", "null"] },
-    side: { enum: ["base", "head", null] },
+    side: { type: ["string", "null"], enum: ["base", "head", null] },
     lineStart: { type: ["number", "null"] },
     lineEnd: { type: ["number", "null"] },
     checkId: { type: ["string", "null"] },
@@ -71,7 +71,7 @@ export const scanJsonSchema = {
   additionalProperties: false,
   required: ["schemaVersion", "summary", "candidates", "coverage"],
   properties: {
-    schemaVersion: { const: 1 },
+    schemaVersion: { type: "integer", const: 1 },
     summary: { type: "string" },
     candidates: {
       type: "array",
@@ -82,9 +82,9 @@ export const scanJsonSchema = {
         properties: {
           title: { type: "string" },
           claim: { type: "string" },
-          severity: { enum: severities },
-          category: { enum: categories },
-          confidence: { enum: confidences },
+          severity: { type: "string", enum: severities },
+          category: { type: "string", enum: categories },
+          confidence: { type: "string", enum: confidences },
           location: locationSchema,
           impact: { type: ["string", "null"] },
           trigger: { type: ["string", "null"] },
@@ -103,7 +103,7 @@ export const verificationJsonSchema = {
   additionalProperties: false,
   required: ["schemaVersion", "summary", "decisions", "coverage"],
   properties: {
-    schemaVersion: { const: 1 },
+    schemaVersion: { type: "integer", const: 1 },
     summary: { type: "string" },
     decisions: {
       type: "array",
@@ -113,12 +113,12 @@ export const verificationJsonSchema = {
         required: ["candidateId", "verdict", "rationale", "confidence", "evidence", "severity", "category", "location", "suggestion", "relatedPreviousFindingId"],
         properties: {
           candidateId: { type: "string" },
-          verdict: { enum: ["confirmed", "rejected", "uncertain"] },
+          verdict: { type: "string", enum: ["confirmed", "rejected", "uncertain"] },
           rationale: { type: "string" },
           confidence: { type: "number", minimum: 0, maximum: 1 },
           evidence: { type: "array", items: evidenceSchema },
-          severity: { enum: [...severities, null] },
-          category: { enum: [...categories, null] },
+          severity: { type: ["string", "null"], enum: [...severities, null] },
+          category: { type: ["string", "null"], enum: [...categories, null] },
           location: { anyOf: [locationSchema, { type: "null" }] },
           suggestion: { type: ["string", "null"] },
           relatedPreviousFindingId: { type: ["string", "null"] }

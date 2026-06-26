@@ -119,7 +119,11 @@ function assertStrictObjects(schema: unknown, path: string): void {
     const properties = Object.keys(node.properties as Record<string, unknown>).sort();
     const required = Array.isArray(node.required) ? [...node.required].sort() : [];
     assert.deepEqual(required, properties, `${path} must require every property for strict structured output`);
-    for (const [key, child] of Object.entries(node.properties as Record<string, unknown>)) assertStrictObjects(child, `${path}.${key}`);
+    for (const [key, child] of Object.entries(node.properties as Record<string, unknown>)) {
+      const property = child as Record<string, unknown>;
+      assert.ok(property.type || property.anyOf, `${path}.${key} must declare an explicit type or anyOf`);
+      assertStrictObjects(child, `${path}.${key}`);
+    }
   }
   if (node.items) assertStrictObjects(node.items, `${path}[]`);
   if (Array.isArray(node.anyOf)) node.anyOf.forEach((child, index) => assertStrictObjects(child, `${path}.anyOf[${index}]`));
