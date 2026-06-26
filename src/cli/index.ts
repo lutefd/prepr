@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
 import { CodexRunner } from "../agents/codex.js";
 import { PreprError } from "../core/errors.js";
 import { parseCategories, parseRisk } from "../core/options.js";
@@ -7,6 +6,7 @@ import { createReviewRun } from "../core/run.js";
 import { resolveRepoRoot } from "../core/git.js";
 import { loadRun } from "../core/storage.js";
 import { startServer } from "../server/http.js";
+import { openBrowser } from "../server/browser.js";
 
 interface CliOptions {
   command?: "open";
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
     await loadRun(repoRoot, options.runId);
     const { url } = await startServer({ repoRoot, runId: options.runId, port: options.port });
     console.log(`prepr listening at ${url}`);
-    await openBrowser(url);
+    if (options.open) await openBrowserWithFallback(url);
     return;
   }
   if (!options.base) throw new PreprError("Missing required --base <ref>.", "INVALID_OPTION");
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
     port: options.port
   });
   console.log(`prepr listening at ${url}`);
-  if (options.open) await openBrowser(url);
+  if (options.open) await openBrowserWithFallback(url);
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -92,11 +92,13 @@ function parseArgs(args: string[]): CliOptions {
   return options;
 }
 
-async function openBrowser(url: string): Promise<void> {
-  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-  const child = spawn(command, args, { detached: true, stdio: "ignore" });
-  child.unref();
+async function openBrowserWithFallback(url: string): Promise<void> {
+  try {
+    await openBrowser(url);
+  } catch (error) {
+    console.warn(`Could not open the browser automatically: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(`Open this URL manually: ${url}`);
+  }
 }
 
 main().catch((error) => {
