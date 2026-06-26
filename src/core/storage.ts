@@ -79,6 +79,12 @@ export async function updateFindings(repoRoot: string, runIdValue: string, updat
   return next;
 }
 
+export async function updateMetadataCounts(repoRoot: string, runIdValue: string, counts: unknown): Promise<void> {
+  const file = path.join(repoRoot, ".prepr", "runs", runIdValue, "metadata.json");
+  const metadata = await readJson<Record<string, unknown>>(file);
+  await writeJson(file, { ...metadata, counts });
+}
+
 export async function updateUiState(repoRoot: string, runIdValue: string, state: Record<string, unknown>): Promise<void> {
   await writeJson(path.join(repoRoot, ".prepr", "runs", runIdValue, "ui-state.json"), state);
 }
