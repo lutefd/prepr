@@ -1,0 +1,27 @@
+test/git-worktree.test.ts
+  s_b82506a15219f7::t_993617fd81719d 1-29
+package.json
+  s_b82506a15219f7::t_0a4b0abce5885a 18-19
+src/core/git.ts
+  s_b82506a15219f7::t_993617fd81719d 88-89,91
+src/core/storage.ts
+  s_b82506a15219f7::t_993617fd81719d 13
+src/agents/codex.ts
+  s_b82506a15219f7::t_993617fd81719d 86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "5fd1a7e5cf0338514148d984cd28cd98e98d994e",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
