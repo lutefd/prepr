@@ -148,11 +148,22 @@ async function serveAsset(res: http.ServerResponse, route: string): Promise<void
   const uiDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../ui/dist");
   const clean = route === "/" ? "/index.html" : route;
   const file = path.resolve(uiDist, clean.slice(1));
-  const target = file.startsWith(uiDist) ? file : path.join(uiDist, "index.html");
+  const target = file === uiDist || file.startsWith(`${uiDist}${path.sep}`) ? file : path.join(uiDist, "index.html");
   const data = await fs.readFile(target).catch(() => undefined);
   if (!data) {
-    res.writeHead(200, { "content-type": "text/html; charset=utf8" });
-    res.end("<div id=\"app\">prepr UI has not been built. Run npm run build:ui.</div>");
+    if (path.extname(clean) && clean !== "/index.html") {
+      res.writeHead(404, { "content-type": "text/plain; charset=utf8" });
+      res.end(`Asset not found: ${clean}`);
+      return;
+    }
+    const index = await fs.readFile(path.join(uiDist, "index.html")).catch(() => undefined);
+    if (index) {
+      res.writeHead(200, { "content-type": "text/html; charset=utf8" });
+      res.end(index);
+      return;
+    }
+    res.writeHead(503, { "content-type": "text/html; charset=utf8" });
+    res.end("<h1>prepr UI is unavailable</h1><p>Run <code>npm run build:ui</code> and restart prepr.</p>");
     return;
   }
   res.writeHead(200, { "content-type": contentType(target) });
