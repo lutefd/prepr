@@ -19,6 +19,20 @@ test("creates a no-agent review run from a temporary git repository", async () =
   await execFileText("git", ["checkout", "-b", "feature"], { cwd: repo });
   await fs.writeFile(path.join(repo, "app.ts"), "export const value = 2;\n");
   await execFileText("git", ["commit", "-am", "change value"], { cwd: repo });
+  await fs.mkdir(path.join(repo, ".prepr"), { recursive: true });
+  await fs.writeFile(
+    path.join(repo, ".prepr", "config.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      checks: [
+        {
+          id: "mutating-check",
+          command: process.execPath,
+          args: ["-e", "require('fs').writeFileSync('app.ts', 'check changed this file\\n'); console.log('check passed')"]
+        }
+      ]
+    })
+  );
 
   const { run, runDir } = await createReviewRun({
     cwd: repo,
@@ -32,4 +46,9 @@ test("creates a no-agent review run from a temporary git repository", async () =
   assert.equal(run.diff.length, 1);
   assert.match(runDir, /\.prepr\/runs/);
   assert.ok(await fs.readFile(path.join(repo, ".git", "info", "exclude"), "utf8").then((text) => text.includes(".prepr/")));
+  assert.equal(await fs.readFile(path.join(repo, "app.ts"), "utf8"), "export const value = 2;\n");
+  const checks = JSON.parse(await fs.readFile(path.join(runDir, "checks.json"), "utf8"));
+  assert.equal(checks[0].status, "passed");
+  assert.match(checks[0].stdout, /check passed/);
+  assert.deepEqual(await fs.readdir(path.join(repo, ".prepr", "worktrees")), []);
 });

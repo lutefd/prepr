@@ -1,6 +1,6 @@
-import fs from "node:fs/promises";
 import path from "node:path";
-import type { DiffFile, FindingCategory } from "../shared/types.js";
+import type { CheckResult, DiffFile, FindingCategory } from "../shared/types.js";
+import { renderCheckResults } from "./checks.js";
 import { PreprError } from "./errors.js";
 import { changedPaths, commitMessages, diffStat, showFileAtRef } from "./git.js";
 
@@ -18,6 +18,7 @@ export interface BundleInput {
   diff: DiffFile[];
   risk: "low" | "medium" | "high";
   only?: FindingCategory[];
+  checks?: CheckResult[];
 }
 
 export async function buildBundle(input: BundleInput): Promise<{ bundle: string; supplemental: Record<string, string> }> {
@@ -28,13 +29,13 @@ export async function buildBundle(input: BundleInput): Promise<{ bundle: string;
     diffStat(input.repoRoot, input.mergeBaseSha, input.headSha),
     commitMessages(input.repoRoot, input.mergeBaseSha, input.headSha),
     changedPaths(input.repoRoot, input.mergeBaseSha, input.headSha),
-    instructionFiles(input.repoRoot)
+    Promise.resolve(instructionFiles())
   ]);
   const supplemental: Record<string, string> = {};
   let supplementalBytes = 0;
   const candidates = [...new Set([...paths, ...nearbyTests(paths), ...instructions])].sort();
   for (const file of candidates) {
-    const content = instructions.includes(file) ? await fs.readFile(path.join(input.repoRoot, file), "utf8").catch(() => undefined) : await showFileAtRef(input.repoRoot, input.headSha, file);
+    const content = await showFileAtRef(input.repoRoot, input.headSha, file);
     if (content === undefined) continue;
     const clipped = limitText(content, SUPPLEMENTAL_FILE_LIMIT);
     const bytes = Buffer.byteLength(clipped);
@@ -63,6 +64,9 @@ export async function buildBundle(input: BundleInput): Promise<{ bundle: string;
     "",
     "## repository instructions and bounded file context",
     ...Object.entries(supplemental).flatMap(([file, content]) => [`### ${file}`, "```", content, "```", ""]),
+    "## configured check output",
+    renderCheckResults(input.checks ?? []),
+    "",
     "## patch",
     "```diff",
     input.patch,
@@ -75,18 +79,8 @@ export async function buildBundle(input: BundleInput): Promise<{ bundle: string;
   return { bundle, supplemental };
 }
 
-async function instructionFiles(repoRoot: string): Promise<string[]> {
-  const names = ["AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", ".github/copilot-instructions.md"];
-  const found: string[] = [];
-  for (const name of names) {
-    try {
-      const stat = await fs.stat(path.join(repoRoot, name));
-      if (stat.isFile()) found.push(name);
-    } catch {
-      // Optional instructions are best-effort.
-    }
-  }
-  return found;
+function instructionFiles(): string[] {
+  return ["AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", ".github/copilot-instructions.md"];
 }
 
 function nearbyTests(paths: string[]): string[] {

@@ -35,6 +35,29 @@ export interface CoverageReceipt {
   notes: string[];
 }
 
+export interface CheckConfig {
+  id: string;
+  command: string;
+  args?: string[];
+  timeoutMs?: number;
+}
+
+export interface PreprConfig {
+  schemaVersion: 1;
+  checks: CheckConfig[];
+}
+
+export interface CheckResult {
+  id: string;
+  command: string[];
+  status: "passed" | "failed" | "timed_out" | "error";
+  exitCode?: number;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+  truncated: boolean;
+}
+
 export interface FindingLocation {
   file: string;
   line?: number;

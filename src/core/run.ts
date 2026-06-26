@@ -2,12 +2,15 @@ import path from "node:path";
 import type { FindingCategory, ReviewFinding, ReviewRun } from "../shared/types.js";
 import type { AgentRunner } from "../agents/runner.js";
 import { buildBundle } from "./bundle.js";
+import { runConfiguredChecks } from "./checks.js";
+import { loadConfig } from "./config.js";
 import { parseDiff } from "./diff.js";
 import { writeExports } from "./export.js";
 import { ensureLocalExclude, rawDiff, requireCleanTree, resolveRefs, resolveRepoRoot } from "./git.js";
 import { normalizeFindings, reconcileFindings } from "./schema.js";
 import { createRunDir, readDismissedFingerprints, runId, saveRun } from "./storage.js";
 import { runReviewWorkflow } from "./workflow.js";
+import { createReviewWorkspace, removeReviewWorkspace, restoreReviewWorkspace } from "./workspace.js";
 
 export interface CreateRunOptions {
   cwd?: string;
@@ -30,76 +33,77 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
   const createdAt = new Date().toISOString();
   const id = runId(createdAt, refs.branch, refs.headSha);
   const paths = await createRunDir(repoRoot, id);
-  const { bundle, supplemental } = await buildBundle({
-    repoRoot,
-    baseRef: options.baseRef,
-    headRef: options.headRef,
-    mergeBaseSha: refs.mergeBaseSha,
-    headSha: refs.headSha,
-    patch,
-    diff,
-    risk: options.risk,
-    only: options.only
-  });
-  const dismissed = await readDismissedFingerprints(repoRoot);
-  const fixed = new Set((options.previous ?? []).filter((f) => f.status === "fixed").map((f) => f.fingerprint));
-  const workflow = options.runner
-    ? await runReviewWorkflow({ runner: options.runner, bundle, workspace: repoRoot, previous: options.previous })
-    : disabledWorkflow(diff);
-  const candidates = options.only?.length ? workflow.findings.filter((f) => options.only?.includes(f.category)) : workflow.findings;
-  let findings = normalizeFindings(candidates, diff, {
-    agent: options.agentName === "codex" ? "codex" : "none",
-    createdAt,
-    dismissedFingerprints: dismissed,
-    fixedFingerprints: fixed
-  });
-  if (options.previous) {
-    findings = reconcileFindings(options.previous, findings, dismissed);
+  const workspace = await createReviewWorkspace(repoRoot, id, refs.headSha);
+  try {
+    const config = await loadConfig(repoRoot);
+    const checks = await runConfiguredChecks(config.checks, workspace);
+    await restoreReviewWorkspace(workspace, refs.headSha);
+    const { bundle, supplemental } = await buildBundle({
+      repoRoot,
+      baseRef: options.baseRef,
+      headRef: options.headRef,
+      mergeBaseSha: refs.mergeBaseSha,
+      headSha: refs.headSha,
+      patch,
+      diff,
+      risk: options.risk,
+      only: options.only,
+      checks
+    });
+    const dismissed = await readDismissedFingerprints(repoRoot);
+    const fixed = new Set((options.previous ?? []).filter((f) => f.status === "fixed").map((f) => f.fingerprint));
+    const workflow = options.runner
+      ? await runReviewWorkflow({ runner: options.runner, bundle, workspace, previous: options.previous })
+      : disabledWorkflow(diff, checks.map((check) => check.id));
+    const candidates = options.only?.length ? workflow.findings.filter((f) => options.only?.includes(f.category)) : workflow.findings;
+    let findings = normalizeFindings(candidates, diff, {
+      agent: options.agentName === "codex" ? "codex" : "none",
+      createdAt,
+      dismissedFingerprints: dismissed,
+      fixedFingerprints: fixed
+    });
+    if (options.previous) findings = reconcileFindings(options.previous, findings, dismissed);
+    const metadata = {
+      id,
+      repoRoot,
+      branch: refs.branch,
+      baseRef: options.baseRef,
+      headRef: options.headRef,
+      baseSha: refs.baseSha,
+      headSha: refs.headSha,
+      mergeBaseSha: refs.mergeBaseSha,
+      createdAt,
+      risk: options.risk,
+      only: options.only,
+      agent: options.agentName,
+      counts: countFindings(diff.length, findings)
+    };
+    const run: ReviewRun = { metadata, diff, findings, summary: workflow.verification.summary, coverage: workflow.coverage, uiState: {} };
+    await saveRun(paths, run, {
+      "patch.diff": patch,
+      "bundle.md": bundle,
+      "supplemental-context.json": supplemental,
+      "checks.json": checks,
+      "scan-output.json": workflow.scan,
+      "verify-output.json": workflow.verification,
+      "suppressed-findings.json": workflow.suppressed,
+      "coverage.json": workflow.coverage,
+      "agent.log": workflow.log,
+      "logs.json": { createdAt, agent: options.agentName }
+    });
+    await writeExports(paths.runDir, run);
+    return { run, runDir: paths.runDir };
+  } finally {
+    await removeReviewWorkspace(repoRoot, workspace);
   }
-  const metadata = {
-    id,
-    repoRoot,
-    branch: refs.branch,
-    baseRef: options.baseRef,
-    headRef: options.headRef,
-    baseSha: refs.baseSha,
-    headSha: refs.headSha,
-    mergeBaseSha: refs.mergeBaseSha,
-    createdAt,
-    risk: options.risk,
-    only: options.only,
-    agent: options.agentName,
-    counts: countFindings(diff.length, findings)
-  };
-  const run: ReviewRun = {
-    metadata,
-    diff,
-    findings,
-    summary: workflow.verification.summary,
-    coverage: workflow.coverage,
-    uiState: {}
-  };
-  await saveRun(paths, run, {
-    "patch.diff": patch,
-    "bundle.md": bundle,
-    "supplemental-context.json": supplemental,
-    "scan-output.json": workflow.scan,
-    "verify-output.json": workflow.verification,
-    "suppressed-findings.json": workflow.suppressed,
-    "coverage.json": workflow.coverage,
-    "agent.log": workflow.log,
-    "logs.json": { createdAt, agent: options.agentName }
-  });
-  await writeExports(paths.runDir, run);
-  return { run, runDir: paths.runDir };
 }
 
-function disabledWorkflow(diff: ReviewRun["diff"]): Awaited<ReturnType<typeof runReviewWorkflow>> {
+function disabledWorkflow(diff: ReviewRun["diff"], checks: string[]): Awaited<ReturnType<typeof runReviewWorkflow>> {
   const coverage = {
     reviewedFiles: diff.map((file) => file.newPath),
     reviewedHunks: diff.reduce((count, file) => count + file.hunks.length, 0),
     exploredSymbols: [],
-    checks: [],
+    checks,
     skippedContext: ["Agent review disabled"],
     notes: ["Diff bundle generated without an agent scan or verification pass."]
   };
