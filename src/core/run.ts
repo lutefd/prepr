@@ -135,11 +135,22 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
     run.state = await transition(finalStatus);
     return { run, runDir: paths.runDir };
   } catch (error) {
+    const failureLog = agentFailureLog(error);
+    if (failureLog) await writeAtomic(path.join(paths.runDir, "agent.log"), failureLog);
     await transition("failed", error);
     throw error;
   } finally {
     if (workspace) await removeReviewWorkspace(repoRoot, workspace);
   }
+}
+
+function agentFailureLog(error: unknown): string | undefined {
+  if (!(error instanceof PreprError) || !error.details || typeof error.details !== "object" || Array.isArray(error.details)) return undefined;
+  const details = error.details as Record<string, unknown>;
+  const stdout = typeof details.stdout === "string" ? details.stdout : "";
+  const stderr = typeof details.stderr === "string" ? details.stderr : "";
+  if (!stdout && !stderr) return undefined;
+  return `${stdout}${stderr ? `${stdout ? "\n" : ""}[stderr]\n${stderr}` : ""}`;
 }
 
 function disabledWorkflow(diff: ReviewRun["diff"], checks: string[]): Awaited<ReturnType<typeof runReviewWorkflow>> {

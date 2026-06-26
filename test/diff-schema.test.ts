@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseDiff } from "../src/core/diff.js";
-import { normalizeFindings } from "../src/core/schema.js";
+import { normalizeFindings, scanJsonSchema, verificationJsonSchema } from "../src/core/schema.js";
 import type { FindingCandidate } from "../src/shared/types.js";
 
 test("parses unified diff hunks and anchors findings to changed new-side lines", () => {
@@ -106,3 +106,21 @@ test("carries dismissals only while the anchored code region still matches", () 
   });
   assert.equal(resurfaced.status, "open");
 });
+
+test("agent output schemas require every declared object property", () => {
+  assertStrictObjects(scanJsonSchema, "scan");
+  assertStrictObjects(verificationJsonSchema, "verification");
+});
+
+function assertStrictObjects(schema: unknown, path: string): void {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return;
+  const node = schema as Record<string, unknown>;
+  if (node.properties && typeof node.properties === "object" && !Array.isArray(node.properties)) {
+    const properties = Object.keys(node.properties as Record<string, unknown>).sort();
+    const required = Array.isArray(node.required) ? [...node.required].sort() : [];
+    assert.deepEqual(required, properties, `${path} must require every property for strict structured output`);
+    for (const [key, child] of Object.entries(node.properties as Record<string, unknown>)) assertStrictObjects(child, `${path}.${key}`);
+  }
+  if (node.items) assertStrictObjects(node.items, `${path}[]`);
+  if (Array.isArray(node.anyOf)) node.anyOf.forEach((child, index) => assertStrictObjects(child, `${path}.anyOf[${index}]`));
+}

@@ -27,18 +27,18 @@ export const confidences = ["high", "medium", "low"] as const satisfies readonly
 const evidenceSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["kind", "explanation"],
+  required: ["kind", "explanation", "file", "ref", "side", "lineStart", "lineEnd", "checkId", "commandId", "excerpt"],
   properties: {
     kind: { enum: ["diff", "base_file", "head_file", "check", "command"] },
     explanation: { type: "string" },
-    file: { type: "string" },
-    ref: { type: "string" },
-    side: { enum: ["base", "head"] },
-    lineStart: { type: "number" },
-    lineEnd: { type: "number" },
-    checkId: { type: "string" },
-    commandId: { type: "string" },
-    excerpt: { type: "string" }
+    file: { type: ["string", "null"] },
+    ref: { type: ["string", "null"] },
+    side: { enum: ["base", "head", null] },
+    lineStart: { type: ["number", "null"] },
+    lineEnd: { type: ["number", "null"] },
+    checkId: { type: ["string", "null"] },
+    commandId: { type: ["string", "null"] },
+    excerpt: { type: ["string", "null"] }
   }
 } as const;
 
@@ -59,10 +59,10 @@ const coverageSchema = {
 const locationSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["file"],
+  required: ["file", "line"],
   properties: {
     file: { type: "string" },
-    line: { type: "number" }
+    line: { type: ["number", "null"] }
   }
 } as const;
 
@@ -78,7 +78,7 @@ export const scanJsonSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["title", "claim", "severity", "category", "confidence", "location", "evidence"],
+        required: ["title", "claim", "severity", "category", "confidence", "location", "impact", "trigger", "evidence", "counterEvidence", "suggestion"],
         properties: {
           title: { type: "string" },
           claim: { type: "string" },
@@ -86,11 +86,11 @@ export const scanJsonSchema = {
           category: { enum: categories },
           confidence: { enum: confidences },
           location: locationSchema,
-          impact: { type: "string" },
-          trigger: { type: "string" },
+          impact: { type: ["string", "null"] },
+          trigger: { type: ["string", "null"] },
           evidence: { type: "array", items: evidenceSchema },
-          counterEvidence: { type: "array", items: { type: "string" } },
-          suggestion: { type: "string" }
+          counterEvidence: { type: ["array", "null"], items: { type: "string" } },
+          suggestion: { type: ["string", "null"] }
         }
       }
     },
@@ -110,18 +110,18 @@ export const verificationJsonSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["candidateId", "verdict", "rationale", "confidence", "evidence"],
+        required: ["candidateId", "verdict", "rationale", "confidence", "evidence", "severity", "category", "location", "suggestion", "relatedPreviousFindingId"],
         properties: {
           candidateId: { type: "string" },
           verdict: { enum: ["confirmed", "rejected", "uncertain"] },
           rationale: { type: "string" },
           confidence: { type: "number", minimum: 0, maximum: 1 },
           evidence: { type: "array", items: evidenceSchema },
-          severity: { enum: severities },
-          category: { enum: categories },
-          location: locationSchema,
-          suggestion: { type: "string" },
-          relatedPreviousFindingId: { type: "string" }
+          severity: { enum: [...severities, null] },
+          category: { enum: [...categories, null] },
+          location: { anyOf: [locationSchema, { type: "null" }] },
+          suggestion: { type: ["string", "null"] },
+          relatedPreviousFindingId: { type: ["string", "null"] }
         }
       }
     },
@@ -182,15 +182,15 @@ export function validateCandidate(value: unknown): FindingCandidate {
 
 function validateVerificationDecision(value: unknown): VerificationDecision {
   if (!isRecord(value)) throw new PreprError("Verification decision is malformed.", "MALFORMED_VERIFICATION");
-  const location = value.location === undefined ? undefined : validateLocation(value.location);
+  const location = value.location == null ? undefined : validateLocation(value.location);
   return {
     candidateId: requiredString(value.candidateId, "candidateId"),
     verdict: enumValue(value.verdict, ["confirmed", "rejected", "uncertain"] as const satisfies readonly VerificationVerdict[], "verdict"),
     rationale: requiredString(value.rationale, "rationale"),
     confidence: boundedNumber(value.confidence, "confidence", 0, 1),
     evidence: validateEvidenceList(value.evidence),
-    severity: value.severity === undefined ? undefined : enumValue(value.severity, severities, "severity"),
-    category: value.category === undefined ? undefined : enumValue(value.category, categories, "category"),
+    severity: value.severity == null ? undefined : enumValue(value.severity, severities, "severity"),
+    category: value.category == null ? undefined : enumValue(value.category, categories, "category"),
     location,
     suggestion: optionalString(value.suggestion),
     relatedPreviousFindingId: optionalString(value.relatedPreviousFindingId)
@@ -203,7 +203,7 @@ function validateLocation(value: unknown): FindingCandidate["location"] {
   validateRepoPath(file);
   return {
     file,
-    line: value.line === undefined ? undefined : Math.max(1, Math.floor(boundedNumber(value.line, "location.line", 1, Number.MAX_SAFE_INTEGER)))
+    line: value.line == null ? undefined : Math.max(1, Math.floor(boundedNumber(value.line, "location.line", 1, Number.MAX_SAFE_INTEGER)))
   };
 }
 
@@ -220,7 +220,7 @@ function validateEvidenceList(value: unknown): EvidenceRef[] {
       explanation: requiredString(entry.explanation, "evidence.explanation"),
       file: file ? normalizeCandidatePath(file) : undefined,
       ref: optionalString(entry.ref),
-      side: entry.side === undefined ? undefined : enumValue(entry.side, ["base", "head"] as const, "evidence.side"),
+      side: entry.side == null ? undefined : enumValue(entry.side, ["base", "head"] as const, "evidence.side"),
       lineStart: optionalPositiveInteger(entry.lineStart, "evidence.lineStart"),
       lineEnd: optionalPositiveInteger(entry.lineEnd, "evidence.lineEnd"),
       checkId: optionalString(entry.checkId),
@@ -374,7 +374,7 @@ function stringList(value: unknown, field: string): string[] {
 }
 
 function optionalStringList(value: unknown, field: string): string[] | undefined {
-  return value === undefined ? undefined : stringList(value, field);
+  return value == null ? undefined : stringList(value, field);
 }
 
 function boundedNumber(value: unknown, field: string, minimum: number, maximum: number): number {
@@ -385,6 +385,6 @@ function boundedNumber(value: unknown, field: string, minimum: number, maximum: 
 }
 
 function optionalPositiveInteger(value: unknown, field: string): number | undefined {
-  if (value === undefined) return undefined;
+  if (value == null) return undefined;
   return Math.floor(boundedNumber(value, field, 1, Number.MAX_SAFE_INTEGER));
 }

@@ -6,6 +6,7 @@ import test from "node:test";
 import type { AgentRunner } from "../src/agents/runner.js";
 import { createReviewRun } from "../src/core/run.js";
 import { execFileText } from "../src/core/process.js";
+import { PreprError } from "../src/core/errors.js";
 import type { CoverageReceipt } from "../src/shared/types.js";
 
 const coverage: CoverageReceipt = {
@@ -37,7 +38,7 @@ test("checkpoints a completed scan when verification fails", async () => {
       return { output, raw: JSON.stringify(output), log: "scan trace" };
     },
     async runVerification() {
-      throw new Error("verifier unavailable");
+      throw new PreprError("verifier unavailable", "AGENT_FAILED", { stdout: "verification event", stderr: "authentication failed" });
     }
   };
   await assert.rejects(
@@ -51,6 +52,7 @@ test("checkpoints a completed scan when verification fails", async () => {
   assert.equal(JSON.parse(await fs.readFile(path.join(runDir, "scan-output.json"), "utf8")).summary, "scan completed");
   assert.equal(await fs.readFile(path.join(runDir, "scan-agent.log"), "utf8"), "scan trace");
   assert.equal(JSON.parse(await fs.readFile(path.join(runDir, "run-state.json"), "utf8")).status, "failed");
+  assert.match(await fs.readFile(path.join(runDir, "agent.log"), "utf8"), /authentication failed/);
   const events = (await fs.readFile(path.join(runDir, "events.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
   assert.deepEqual(events.map((event) => event.status), ["preflight", "checking", "scanning", "verifying", "failed"]);
 });
