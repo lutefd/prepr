@@ -66,9 +66,16 @@
   }
 
   async function dismiss(finding: ReviewFinding) {
+    const allowed = ["false_positive", "intentional", "not_actionable", "already_known", "duplicate", "other"];
+    const reason = window.prompt(`Dismiss reason (${allowed.join(", ")}):`, "false_positive")?.trim();
+    if (!reason) return;
+    if (!allowed.includes(reason)) {
+      error = `Unknown dismissal reason: ${reason}`;
+      return;
+    }
     busy = finding.id;
     try {
-      const response = await post(`/api/findings/${finding.id}/dismiss`);
+      const response = await post(`/api/findings/${finding.id}/dismiss`, { reason });
       findings = response.findings;
     } finally {
       busy = "";

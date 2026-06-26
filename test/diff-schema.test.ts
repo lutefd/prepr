@@ -31,7 +31,7 @@ index 111..222 100644
   const findings = normalizeFindings([candidate, candidate], diff, {
     agent: "codex",
     createdAt: "2026-06-26T00:00:00.000Z",
-    dismissedFingerprints: new Set()
+    dismissals: []
   });
   assert.equal(findings.length, 1);
   assert.equal(findings[0].location.line, 2);
@@ -54,8 +54,55 @@ test("rejects escaping candidate paths", () => {
           }
         ],
         [],
-        { agent: "codex", createdAt: "2026-06-26T00:00:00.000Z", dismissedFingerprints: new Set() }
+        { agent: "codex", createdAt: "2026-06-26T00:00:00.000Z", dismissals: [] }
       ),
     /Path escapes repository/
   );
+});
+
+test("carries dismissals only while the anchored code region still matches", () => {
+  const originalDiff = parseDiff(`diff --git a/src/a.ts b/src/a.ts
+--- a/src/a.ts
++++ b/src/a.ts
+@@ -1,2 +1,2 @@
+-const value = 1
++const value = 2
+ export const result = value
+`);
+  const candidate: FindingCandidate = {
+    title: "Changed result",
+    claim: "The new value changes the exported result.",
+    severity: "medium",
+    category: "bug",
+    confidence: "high",
+    location: { file: "src/a.ts", line: 1 },
+    evidence: [{ kind: "diff", explanation: "The value changed.", file: "src/a.ts", lineStart: 1 }]
+  };
+  const [initial] = normalizeFindings([candidate], originalDiff, {
+    agent: "codex",
+    createdAt: "2026-06-26T00:00:00.000Z",
+    dismissals: []
+  });
+  const dismissal = { fingerprint: initial.fingerprint, regionHash: initial.regionHash, reason: "intentional" as const, createdAt: "2026-06-26T00:01:00.000Z" };
+  const [unchanged] = normalizeFindings([candidate], originalDiff, {
+    agent: "codex",
+    createdAt: "2026-06-26T00:02:00.000Z",
+    dismissals: [dismissal]
+  });
+  assert.equal(unchanged.status, "dismissed");
+
+  const changedDiff = parseDiff(`diff --git a/src/a.ts b/src/a.ts
+--- a/src/a.ts
++++ b/src/a.ts
+@@ -1,2 +1,2 @@
+-const value = 1
++const value = 3
+ export const result = value
+`);
+  const [resurfaced] = normalizeFindings([candidate], changedDiff, {
+    agent: "codex",
+    createdAt: "2026-06-26T00:03:00.000Z",
+    dismissals: [dismissal]
+  });
+  assert.equal(resurfaced.status, "open");
 });

@@ -12,6 +12,7 @@ export type FindingConfidence = "high" | "medium" | "low";
 export type ReviewStage = "scan" | "verify";
 export type VerificationVerdict = "confirmed" | "rejected" | "uncertain";
 export type EvidenceKind = "diff" | "base_file" | "head_file" | "check" | "command";
+export type DismissalReason = "false_positive" | "intentional" | "not_actionable" | "already_known" | "duplicate" | "other";
 
 export interface EvidenceRef {
   kind: EvidenceKind;
@@ -128,8 +129,17 @@ export interface ReviewFinding extends FindingCandidate {
   agent: "codex" | "none";
   createdAt: string;
   fingerprint: string;
+  regionHash: string;
   status: FindingStatus;
   isNew?: boolean;
+}
+
+export interface DismissalRecord {
+  fingerprint: string;
+  regionHash: string;
+  reason: DismissalReason;
+  note?: string;
+  createdAt: string;
 }
 
 export interface DiffLine {

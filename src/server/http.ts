@@ -2,10 +2,10 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { RerunJob, ReviewRun } from "../shared/types.js";
+import type { DismissalReason, RerunJob, ReviewRun } from "../shared/types.js";
 import { CodexRunner } from "../agents/codex.js";
 import { PreprError } from "../core/errors.js";
-import { addDismissedFingerprint, loadRun, updateFindings, updateMetadataCounts, updateUiState } from "../core/storage.js";
+import { addDismissal, loadRun, updateFindings, updateMetadataCounts, updateUiState } from "../core/storage.js";
 import { countFindings, createReviewRun, runDirectory } from "../core/run.js";
 import { writeExports } from "../core/export.js";
 import { openEditor } from "./editor.js";
@@ -20,6 +20,7 @@ export interface ServerOptions {
 }
 
 const jobs = new Map<string, RerunJob>();
+const dismissalReasons = ["false_positive", "intentional", "not_actionable", "already_known", "duplicate", "other"] as const satisfies readonly DismissalReason[];
 
 export async function startServer(options: ServerOptions & { port?: number }): Promise<{ server: http.Server; port: number; url: string }> {
   let run = await loadRun(options.repoRoot, options.runId);
@@ -58,7 +59,18 @@ async function handleApi(
     const id = decodeURIComponent(url.pathname.split("/")[3]);
     const target = run.findings.find((f) => f.id === id);
     if (!target) throw new PreprError(`Unknown finding ${id}`, "UNKNOWN_FINDING");
-    await addDismissedFingerprint(options.repoRoot, target.fingerprint);
+    const body = await readBody(req);
+    if (!isRecord(body) || typeof body.reason !== "string" || !(dismissalReasons as readonly string[]).includes(body.reason)) {
+      throw new PreprError(`Dismissal requires { reason } using one of: ${dismissalReasons.join(", ")}.`, "INVALID_BODY");
+    }
+    if (body.note !== undefined && typeof body.note !== "string") throw new PreprError("Dismissal note must be a string.", "INVALID_BODY");
+    await addDismissal(options.repoRoot, {
+      fingerprint: target.fingerprint,
+      regionHash: target.regionHash,
+      reason: body.reason as DismissalReason,
+      note: typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 2_000) : undefined,
+      createdAt: new Date().toISOString()
+    });
     const next = await updateFindings(options.repoRoot, run.metadata.id, (findings) =>
       findings.map((f) => (f.id === id ? { ...f, status: "dismissed" } : f))
     );

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ReviewFinding, ReviewRun, RunMetadata } from "../shared/types.js";
+import type { DismissalRecord, ReviewFinding, ReviewRun, RunMetadata } from "../shared/types.js";
 import { PreprError } from "./errors.js";
 
 export interface RunPaths {
@@ -90,15 +90,15 @@ export async function updateUiState(repoRoot: string, runIdValue: string, state:
   await writeJson(path.join(repoRoot, ".prepr", "runs", runIdValue, "ui-state.json"), state);
 }
 
-export async function readDismissedFingerprints(repoRoot: string): Promise<Set<string>> {
-  const file = path.join(repoRoot, ".prepr", "dismissed-fingerprints.json");
-  const values = await readJson<string[]>(file).catch(() => []);
-  return new Set(values);
+export async function readDismissals(repoRoot: string): Promise<DismissalRecord[]> {
+  const file = path.join(repoRoot, ".prepr", "dismissals.json");
+  return readJson<DismissalRecord[]>(file).catch(() => []);
 }
 
-export async function addDismissedFingerprint(repoRoot: string, fingerprint: string): Promise<void> {
-  const values = await readDismissedFingerprints(repoRoot);
-  values.add(fingerprint);
+export async function addDismissal(repoRoot: string, dismissal: DismissalRecord): Promise<void> {
+  const values = await readDismissals(repoRoot);
+  const next = values.filter((value) => value.fingerprint !== dismissal.fingerprint || value.regionHash !== dismissal.regionHash);
+  next.push(dismissal);
   await fs.mkdir(path.join(repoRoot, ".prepr"), { recursive: true });
-  await writeJson(path.join(repoRoot, ".prepr", "dismissed-fingerprints.json"), [...values].sort());
+  await writeJson(path.join(repoRoot, ".prepr", "dismissals.json"), next.sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
 }

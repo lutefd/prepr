@@ -8,7 +8,7 @@ import { parseDiff } from "./diff.js";
 import { writeExports } from "./export.js";
 import { ensureLocalExclude, rawDiff, requireCleanTree, resolveRefs, resolveRepoRoot } from "./git.js";
 import { normalizeFindings, reconcileFindings } from "./schema.js";
-import { createRunDir, readDismissedFingerprints, runId, saveRun } from "./storage.js";
+import { createRunDir, readDismissals, runId, saveRun } from "./storage.js";
 import { runReviewWorkflow } from "./workflow.js";
 import { createReviewWorkspace, removeReviewWorkspace, restoreReviewWorkspace } from "./workspace.js";
 
@@ -50,7 +50,7 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
       only: options.only,
       checks
     });
-    const dismissed = await readDismissedFingerprints(repoRoot);
+    const dismissals = await readDismissals(repoRoot);
     const fixed = new Set((options.previous ?? []).filter((f) => f.status === "fixed").map((f) => f.fingerprint));
     const workflow = options.runner
       ? await runReviewWorkflow({ runner: options.runner, bundle, workspace, previous: options.previous })
@@ -59,10 +59,10 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
     let findings = normalizeFindings(candidates, diff, {
       agent: options.agentName === "codex" ? "codex" : "none",
       createdAt,
-      dismissedFingerprints: dismissed,
+      dismissals,
       fixedFingerprints: fixed
     });
-    if (options.previous) findings = reconcileFindings(options.previous, findings, dismissed);
+    if (options.previous) findings = reconcileFindings(options.previous, findings, dismissals);
     const metadata = {
       id,
       repoRoot,

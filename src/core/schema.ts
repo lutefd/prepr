@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import type {
   CoverageReceipt,
+  DismissalRecord,
   DiffFile,
   EvidenceKind,
   EvidenceRef,
@@ -247,7 +248,7 @@ export function normalizeFindings(
   options: {
     agent: "codex" | "none";
     createdAt: string;
-    dismissedFingerprints: Set<string>;
+    dismissals: DismissalRecord[];
     fixedFingerprints?: Set<string>;
   }
 ): ReviewFinding[] {
@@ -264,6 +265,7 @@ export function normalizeFindings(
       location: { file: file.newPath, line }
     };
     const fingerprint = stableFingerprint(anchored);
+    const regionHash = codeRegionHash(file, line);
     if (seen.has(fingerprint)) continue;
     seen.add(fingerprint);
     const fixedAgain = options.fixedFingerprints?.has(fingerprint) ?? false;
@@ -273,14 +275,15 @@ export function normalizeFindings(
       agent: options.agent,
       createdAt: options.createdAt,
       fingerprint,
-      status: options.dismissedFingerprints.has(fingerprint) ? "dismissed" : fixedAgain ? "open" : "open",
+      regionHash,
+      status: isDismissed(options.dismissals, fingerprint, regionHash) ? "dismissed" : fixedAgain ? "open" : "open",
       isNew: true
     });
   }
   return findings;
 }
 
-export function reconcileFindings(previous: ReviewFinding[], current: ReviewFinding[], dismissedFingerprints: Set<string>): ReviewFinding[] {
+export function reconcileFindings(previous: ReviewFinding[], current: ReviewFinding[], dismissals: DismissalRecord[]): ReviewFinding[] {
   const currentFingerprints = new Set(current.map((f) => f.fingerprint));
   const carryResolved = previous
     .filter((f) => !currentFingerprints.has(f.fingerprint) && f.status !== "resolved")
@@ -288,7 +291,7 @@ export function reconcileFindings(previous: ReviewFinding[], current: ReviewFind
   return [
     ...current.map((finding) => {
       const prior = previous.find((p) => p.fingerprint === finding.fingerprint);
-      const status: ReviewFinding["status"] = dismissedFingerprints.has(finding.fingerprint) || prior?.status === "dismissed" ? "dismissed" : "open";
+      const status: ReviewFinding["status"] = isDismissed(dismissals, finding.fingerprint, finding.regionHash) ? "dismissed" : "open";
       return {
         ...finding,
         status,
@@ -297,6 +300,23 @@ export function reconcileFindings(previous: ReviewFinding[], current: ReviewFind
     }),
     ...carryResolved
   ];
+}
+
+export function codeRegionHash(file: DiffFile, line?: number): string {
+  const matchingHunk = line === undefined
+    ? file.hunks[0]
+    : file.hunks.find((hunk) => hunk.lines.some((entry) => entry.newLine === line));
+  if (!matchingHunk) return shortHash(`${file.newPath}\nfile-level`);
+  const index = line === undefined ? 0 : Math.max(0, matchingHunk.lines.findIndex((entry) => entry.newLine === line));
+  const region = matchingHunk.lines
+    .slice(Math.max(0, index - 3), index + 4)
+    .map((entry) => `${entry.kind}:${entry.content}`)
+    .join("\n");
+  return shortHash(`${file.newPath}\n${region}`);
+}
+
+function isDismissed(dismissals: DismissalRecord[], fingerprint: string, regionHash: string): boolean {
+  return dismissals.some((dismissal) => dismissal.fingerprint === fingerprint && dismissal.regionHash === regionHash);
 }
 
 export function stableFingerprint(candidate: FindingCandidate): string {
