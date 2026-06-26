@@ -1,0 +1,34 @@
+{
+  "name": "prepr",
+  "version": "0.1.0",
+  "description": "Local-first branch review bundles with Codex findings and a Svelte diff viewer.",
+  "type": "module",
+  "bin": {
+    "prepr": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "ui/dist"
+  ],
+  "scripts": {
+    "build": "npm run build:backend && npm run build:ui",
+    "build:backend": "tsc -p tsconfig.json",
+    "build:ui": "vite build --config ui/vite.config.ts",
+    "dev:ui": "vite --config ui/vite.config.ts",
+    "test": "node --test --import tsx test/**/*.test.ts",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "svelte": "^5.0.0",
+    "vite": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}
