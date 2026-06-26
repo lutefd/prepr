@@ -53,6 +53,7 @@ async function handleApi(
 ): Promise<unknown> {
   const run = getRun();
   if (req.method === "GET" && url.pathname === "/api/run") return run.metadata;
+  if (req.method === "GET" && url.pathname === "/api/state") return run.state;
   if (req.method === "GET" && url.pathname === "/api/diff") return run.diff;
   if (req.method === "GET" && url.pathname === "/api/findings") return run.findings;
   if (req.method === "POST" && url.pathname.match(/^\/api\/findings\/[^/]+\/dismiss$/)) {

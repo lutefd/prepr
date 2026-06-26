@@ -13,6 +13,18 @@ export type ReviewStage = "scan" | "verify";
 export type VerificationVerdict = "confirmed" | "rejected" | "uncertain";
 export type EvidenceKind = "diff" | "base_file" | "head_file" | "check" | "command";
 export type DismissalReason = "false_positive" | "intentional" | "not_actionable" | "already_known" | "duplicate" | "other";
+export type RunStatus = "preflight" | "checking" | "scanning" | "verifying" | "completed" | "completed_with_check_failures" | "failed" | "cancelled";
+
+export interface RunState {
+  runId: string;
+  status: RunStatus;
+  updatedAt: string;
+  error?: { code?: string; message: string };
+}
+
+export interface ReviewProgressEvent extends RunState {
+  sequence: number;
+}
 
 export interface EvidenceRef {
   kind: EvidenceKind;
@@ -199,6 +211,7 @@ export interface ReviewRun {
   findings: ReviewFinding[];
   summary: string;
   coverage?: CoverageReceipt;
+  state?: RunState;
   uiState?: Record<string, unknown>;
 }
 

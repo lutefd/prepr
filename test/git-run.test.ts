@@ -43,6 +43,7 @@ test("creates a no-agent review run from a temporary git repository", async () =
   });
 
   assert.equal(run.metadata.agent, "none");
+  assert.equal(run.state?.status, "completed");
   assert.equal(run.diff.length, 1);
   assert.match(runDir, /\.prepr\/runs/);
   assert.ok(await fs.readFile(path.join(repo, ".git", "info", "exclude"), "utf8").then((text) => text.includes(".prepr/")));
@@ -51,4 +52,6 @@ test("creates a no-agent review run from a temporary git repository", async () =
   assert.equal(checks[0].status, "passed");
   assert.match(checks[0].stdout, /check passed/);
   assert.deepEqual(await fs.readdir(path.join(repo, ".prepr", "worktrees")), []);
+  const events = (await fs.readFile(path.join(runDir, "events.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(events.map((event) => event.status), ["preflight", "checking", "completed"]);
 });

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { DismissalRecord, ReviewFinding, ReviewRun, RunMetadata } from "../shared/types.js";
+import type { DismissalRecord, ReviewFinding, ReviewProgressEvent, ReviewRun, RunMetadata, RunState } from "../shared/types.js";
 import { PreprError } from "./errors.js";
 
 export interface RunPaths {
@@ -60,8 +60,15 @@ export async function loadRun(repoRoot: string, id?: string): Promise<ReviewRun>
     findings: await readJson(path.join(runDir, "findings.json")),
     summary: await fs.readFile(path.join(runDir, "summary.md"), "utf8"),
     coverage: await readJson<ReviewRun["coverage"]>(path.join(runDir, "coverage.json")).catch(() => undefined),
+    state: await readJson<RunState>(path.join(runDir, "run-state.json")).catch(() => undefined),
     uiState: (await readJson<Record<string, unknown>>(path.join(runDir, "ui-state.json")).catch(() => ({})))
   };
+}
+
+export async function writeRunState(runDir: string, state: RunState, sequence: number): Promise<void> {
+  await writeJson(path.join(runDir, "run-state.json"), state);
+  const event: ReviewProgressEvent = { ...state, sequence };
+  await fs.appendFile(path.join(runDir, "events.jsonl"), `${JSON.stringify(event)}\n`);
 }
 
 export async function latestRunDir(repoRoot: string): Promise<string> {

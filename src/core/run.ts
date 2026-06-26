@@ -5,10 +5,11 @@ import { buildBundle } from "./bundle.js";
 import { runConfiguredChecks } from "./checks.js";
 import { loadConfig } from "./config.js";
 import { parseDiff } from "./diff.js";
+import { PreprError } from "./errors.js";
 import { writeExports } from "./export.js";
 import { ensureLocalExclude, rawDiff, requireCleanTree, resolveRefs, resolveRepoRoot } from "./git.js";
 import { normalizeFindings, reconcileFindings } from "./schema.js";
-import { createRunDir, readDismissals, runId, saveRun } from "./storage.js";
+import { createRunDir, readDismissals, runId, saveRun, writeAtomic, writeJson, writeRunState } from "./storage.js";
 import { runReviewWorkflow } from "./workflow.js";
 import { createReviewWorkspace, removeReviewWorkspace, restoreReviewWorkspace } from "./workspace.js";
 
@@ -33,10 +34,27 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
   const createdAt = new Date().toISOString();
   const id = runId(createdAt, refs.branch, refs.headSha);
   const paths = await createRunDir(repoRoot, id);
-  const workspace = await createReviewWorkspace(repoRoot, id, refs.headSha);
+  let eventSequence = 0;
+  const transition = async (status: NonNullable<ReviewRun["state"]>["status"], error?: unknown) => {
+    const state = {
+      runId: id,
+      status,
+      updatedAt: new Date().toISOString(),
+      error: error
+        ? { code: error instanceof PreprError ? error.code : undefined, message: error instanceof Error ? error.message : String(error) }
+        : undefined
+    };
+    await writeRunState(paths.runDir, state, ++eventSequence);
+    return state;
+  };
+  await transition("preflight");
+  let workspace: string | undefined;
   try {
+    workspace = await createReviewWorkspace(repoRoot, id, refs.headSha);
     const config = await loadConfig(repoRoot);
+    await transition("checking");
     const checks = await runConfiguredChecks(config.checks, workspace);
+    await writeJson(path.join(paths.runDir, "checks.json"), checks);
     await restoreReviewWorkspace(workspace, refs.headSha);
     const { bundle, supplemental } = await buildBundle({
       repoRoot,
@@ -58,7 +76,15 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
           bundle,
           workspace,
           previous: options.previous,
-          evidenceContext: { repoRoot, baseSha: refs.mergeBaseSha, headSha: refs.headSha, diff, checks }
+          evidenceContext: { repoRoot, baseSha: refs.mergeBaseSha, headSha: refs.headSha, diff, checks },
+          onStageStart: async (stage) => {
+            await transition(stage === "scan" ? "scanning" : "verifying");
+          },
+          onStageComplete: async (stage, result) => {
+            await writeJson(path.join(paths.runDir, `${stage}-output.json`), result.output);
+            await writeAtomic(path.join(paths.runDir, `${stage}-raw.json`), result.raw);
+            await writeAtomic(path.join(paths.runDir, `${stage}-agent.log`), result.log);
+          }
         })
       : disabledWorkflow(diff, checks.map((check) => check.id));
     const candidates = options.only?.length ? workflow.findings.filter((f) => options.only?.includes(f.category)) : workflow.findings;
@@ -84,12 +110,20 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
       agent: options.agentName,
       counts: countFindings(diff.length, findings)
     };
-    const run: ReviewRun = { metadata, diff, findings, summary: workflow.verification.summary, coverage: workflow.coverage, uiState: {} };
+    const finalStatus = checks.some((check) => check.status !== "passed") ? "completed_with_check_failures" : "completed";
+    const run: ReviewRun = {
+      metadata,
+      diff,
+      findings,
+      summary: workflow.verification.summary,
+      coverage: workflow.coverage,
+      state: { runId: id, status: finalStatus, updatedAt: new Date().toISOString() },
+      uiState: {}
+    };
     await saveRun(paths, run, {
       "patch.diff": patch,
       "bundle.md": bundle,
       "supplemental-context.json": supplemental,
-      "checks.json": checks,
       "scan-output.json": workflow.scan,
       "verify-output.json": workflow.verification,
       "suppressed-findings.json": workflow.suppressed,
@@ -98,9 +132,13 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
       "logs.json": { createdAt, agent: options.agentName }
     });
     await writeExports(paths.runDir, run);
+    run.state = await transition(finalStatus);
     return { run, runDir: paths.runDir };
+  } catch (error) {
+    await transition("failed", error);
+    throw error;
   } finally {
-    await removeReviewWorkspace(repoRoot, workspace);
+    if (workspace) await removeReviewWorkspace(repoRoot, workspace);
   }
 }
 

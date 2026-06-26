@@ -1,10 +1,14 @@
 import type { AgentRunner } from "../agents/runner.js";
+import type { AgentStageResult } from "../agents/runner.js";
 import type {
   CoverageReceipt,
   FindingCandidate,
   ReviewFinding,
   ReviewWorkflowResult,
   ScannedCandidate,
+  ReviewStage,
+  ScanResult,
+  VerificationResult,
   VerificationDecision
 } from "../shared/types.js";
 import { PreprError } from "./errors.js";
@@ -18,14 +22,23 @@ export async function runReviewWorkflow(input: {
   workspace: string;
   previous?: ReviewFinding[];
   evidenceContext?: Omit<EvidenceContext, "agentLog">;
+  onStageStart?: (stage: ReviewStage) => Promise<void> | void;
+  onStageComplete?: (
+    stage: ReviewStage,
+    result: AgentStageResult<ScanResult | VerificationResult>
+  ) => Promise<void> | void;
 }): Promise<ReviewWorkflowResult> {
+  await input.onStageStart?.("scan");
   const scanStage = await input.runner.runScan({ bundle: input.bundle, workspace: input.workspace });
+  await input.onStageComplete?.("scan", scanStage);
+  await input.onStageStart?.("verify");
   const verificationStage = await input.runner.runVerification({
     bundle: input.bundle,
     workspace: input.workspace,
     candidates: scanStage.output.candidates,
     previous: input.previous ?? []
   });
+  await input.onStageComplete?.("verify", verificationStage);
   const decisions = indexDecisions(verificationStage.output.decisions, scanStage.output.candidates);
   const findings: FindingCandidate[] = [];
   const suppressed: ReviewWorkflowResult["suppressed"] = [];
