@@ -1,0 +1,26 @@
+test/diff-schema.test.ts
+  s_b82506a15219f7::t_37fba356f1350e 4,109-126
+src/core/schema.ts
+  s_b82506a15219f7::t_b8b8e81679bc7d 30,34-41,62,65,81,89-90,92-93,113,120-124,185,192-193,206,223,377,388
+src/core/run.ts
+  s_b82506a15219f7::t_7ae72130e6902f 138-139,147-153
+  s_b82506a15219f7::t_469e0f91a39021 154-155
+test/run-checkpoint.test.ts
+  s_b82506a15219f7::t_7ae72130e6902f 9,41,55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "4a1b445f0a282ae396e934a74696f6fa2f08887a",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "kindle-alpha"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
