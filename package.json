@@ -15,7 +15,8 @@
     "build:backend": "tsc -p tsconfig.json",
     "build:ui": "vite build --config ui/vite.config.ts",
     "dev:ui": "vite --config ui/vite.config.ts",
-    "test": "node --experimental-strip-types --no-warnings --loader ./test/ts-loader.mjs --test test/**/*.test.ts",
+    "test": "node --test --import tsx test/**/*.test.ts",
+    "test:native": "node --experimental-strip-types --no-warnings --loader ./test/ts-loader.mjs --test test/**/*.test.ts",
     "prepack": "npm run build"
   },
   "dependencies": {

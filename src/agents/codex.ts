@@ -83,7 +83,7 @@ export async function runCodexProcess<T>(
         settled = true;
         child.kill("SIGTERM");
         void cleanupOutputFiles(schemaFile, outputFile);
-        reject(new PreprError("Codex review timed out after ten minutes.", "AGENT_TIMEOUT"));
+        reject(new PreprError(`Codex review timed out after ${timeoutMs}ms.`, "AGENT_TIMEOUT"));
       }
     }, timeoutMs);
     child.stdout.setEncoding("utf8");

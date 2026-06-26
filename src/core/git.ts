@@ -85,8 +85,10 @@ export async function showFileAtRef(repoRoot: string, ref: string, file: string)
 }
 
 export async function ensureLocalExclude(repoRoot: string): Promise<void> {
-  const exclude = path.join(repoRoot, ".git", "info", "exclude");
+  const { stdout } = await execFileText("git", ["rev-parse", "--git-path", "info/exclude"], { cwd: repoRoot });
+  const exclude = path.isAbsolute(stdout.trim()) ? stdout.trim() : path.resolve(repoRoot, stdout.trim());
   const fs = await import("node:fs/promises");
+  await fs.mkdir(path.dirname(exclude), { recursive: true });
   const current = await fs.readFile(exclude, "utf8").catch(() => "");
   if (!current.split(/\r?\n/).includes(".prepr/")) {
     await fs.appendFile(exclude, `${current.endsWith("\n") || current.length === 0 ? "" : "\n"}.prepr/\n`);

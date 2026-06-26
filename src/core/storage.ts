@@ -10,7 +10,7 @@ export interface RunPaths {
 }
 
 export function runId(createdAt: string, branch: string, headSha: string): string {
-  const stamp = createdAt.replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+  const stamp = createdAt.replace(/[-:]/g, "").replace(/\.(\d+)Z$/, "$1Z");
   return `${stamp}-${branch}-${headSha.slice(0, 8)}`;
 }
 
