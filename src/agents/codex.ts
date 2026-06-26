@@ -5,7 +5,11 @@ import type { ScanResult, VerificationResult } from "../shared/types.js";
 import type { AgentRunner, AgentStageResult } from "./runner.js";
 
 export class CodexRunner implements AgentRunner {
-  constructor(private readonly timeoutMs = 10 * 60 * 1000) {}
+  private readonly timeoutMs: number;
+
+  constructor(timeoutMs = 10 * 60 * 1000) {
+    this.timeoutMs = timeoutMs;
+  }
 
   async runScan(input: Parameters<AgentRunner["runScan"]>[0]): Promise<AgentStageResult<ScanResult>> {
     const prompt = [
