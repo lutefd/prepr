@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import path from "node:path";
 import { CodexRunner } from "../agents/codex.js";
 import { PreprError } from "../core/errors.js";
 import { parseCategories, parseRisk } from "../core/options.js";
@@ -34,7 +35,7 @@ async function main(): Promise<void> {
   }
   if (!options.base) throw new PreprError("Missing required --base <ref>.", "INVALID_OPTION");
   const runner = options.noAgent ? undefined : new CodexRunner();
-  const { run } = await createReviewRun({
+  const { run, runDir } = await createReviewRun({
     baseRef: options.base,
     headRef: options.head,
     risk: options.risk,
@@ -43,7 +44,31 @@ async function main(): Promise<void> {
     runner
   });
   if (options.json) {
-    console.log(JSON.stringify({ run: run.metadata, counts: run.metadata.counts }, null, 2));
+    const githubComments = path.join(runDir, "exports", "github-comments.md");
+    console.log(
+      JSON.stringify(
+        {
+          run: run.metadata,
+          counts: run.metadata.counts,
+          runDir,
+          exports: {
+            "review-summary.md": path.join(runDir, "exports", "review-summary.md"),
+            "github-comments.md": githubComments,
+            "findings.json": path.join(runDir, "exports", "findings.json")
+          },
+          comments: {
+            generated: run.metadata.counts.open,
+            path: githubComments,
+            note:
+              run.metadata.counts.open === 0
+                ? "No GitHub comments were generated because the review produced no open findings. Inspect scan-output.json, verify-output.json, and suppressed-findings.json in runDir for diagnostics."
+                : undefined
+          }
+        },
+        null,
+        2
+      )
+    );
     return;
   }
   const { url } = await startServer({
