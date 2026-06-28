@@ -1,0 +1,21 @@
+test/ui-entry.test.ts
+  s_b82506a15219f7::t_38b0d838f7d505 14-21
+ui/src/App.svelte
+  s_b82506a15219f7::t_b6d622d9398214 9,13,18,150-167,170-171,196-215,217,230,272-280,284,287,290,292-306,308-340,344
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "4ae1270e32fda4b1ff0e429eca5eb643eb2ae4d5",
+  "prompts": {},
+  "sessions": {
+    "s_b82506a15219f7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f0588-9af2-7112-97c5-41503db5a027",
+        "model": "unknown"
+      },
+      "human_author": "Luis Dourado <lfaddourado@gmail.com>"
+    }
+  }
+}
