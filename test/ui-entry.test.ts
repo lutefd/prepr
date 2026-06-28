@@ -11,3 +11,11 @@ test("mounts the application with the Svelte 5 component API", async () => {
   assert.match(entry, /mount\(App,/);
   assert.doesNotMatch(entry, /new App\(/);
 });
+
+test("keeps review columns independently scrollable on desktop", async () => {
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const app = await fs.readFile(path.resolve(testDir, "../ui/src/App.svelte"), "utf8");
+  assert.match(app, /lg:h-screen/);
+  assert.match(app, /lg:grid-cols-\[300px_minmax\(0,1fr\)_380px\]/);
+  assert.equal((app.match(/lg:overflow-y-auto/g) ?? []).length, 3);
+});

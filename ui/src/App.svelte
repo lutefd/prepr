@@ -6,14 +6,16 @@
     Copy,
     Download,
     ExternalLink,
+    FileText,
     Eye,
     EyeOff,
     GitBranch,
+    MessageSquare,
     RefreshCw,
     SplitSquareHorizontal,
     XCircle
   } from "@lucide/svelte";
-  import type { DiffFile, DiffLine, ReviewFinding, RunMetadata } from "../../src/shared/types";
+  import type { DiffFile, DiffLine, EvidenceRef, ReviewFinding, RunMetadata } from "../../src/shared/types";
 
   let metadata: RunMetadata | undefined;
   let diff: DiffFile[] = [];
@@ -145,10 +147,28 @@
     if (line.kind === "del") return "bg-red-50";
     return "bg-white";
   }
+
+  function findingAnchor(finding: ReviewFinding) {
+    return `${finding.location.file}${finding.location.line ? `:${finding.location.line}` : ""}`;
+  }
+
+  function severityClass(severityValue: ReviewFinding["severity"]) {
+    if (severityValue === "critical" || severityValue === "high") return "bg-red-50 text-red-800 ring-red-200";
+    if (severityValue === "medium") return "bg-amber-50 text-amber-900 ring-amber-200";
+    if (severityValue === "low") return "bg-blue-50 text-blue-800 ring-blue-200";
+    return "bg-slate-100 text-slate-700 ring-slate-200";
+  }
+
+  function evidenceLabel(evidence: EvidenceRef) {
+    if (evidence.kind === "check") return evidence.checkId ?? "check output";
+    if (evidence.kind === "command") return evidence.commandId ?? "agent command";
+    const line = evidence.lineStart ? `:${evidence.lineStart}${evidence.lineEnd && evidence.lineEnd !== evidence.lineStart ? `-${evidence.lineEnd}` : ""}` : "";
+    return `${evidence.file ?? evidence.kind}${line}`;
+  }
 </script>
 
-<main class="min-h-screen bg-[#f6f8fa] text-[#1f2328]">
-  <header class="border-b border-[#d0d7de] bg-white px-4 py-3">
+<main class="flex min-h-screen flex-col bg-[#f6f8fa] text-[#1f2328] lg:h-screen lg:min-h-0 lg:overflow-hidden">
+  <header class="shrink-0 border-b border-[#d0d7de] bg-white px-4 py-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <div class="flex items-center gap-2 text-sm text-[#57606a]">
@@ -173,26 +193,28 @@
     {#if error}<p class="mt-2 text-sm text-red-700">{error}</p>{/if}
   </header>
 
-  <div class="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
-    <aside class="border-b border-[#d0d7de] bg-white p-3 lg:min-h-[calc(100vh-73px)] lg:border-b-0 lg:border-r">
-      <div class="grid grid-cols-2 gap-2">
-        <select class="h-9 rounded border border-[#d0d7de] bg-white px-2 text-sm" bind:value={severity} on:change={saveUiState} aria-label="Severity filter">
-          {#each severities as item}<option value={item}>{item}</option>{/each}
-        </select>
-        <select class="h-9 rounded border border-[#d0d7de] bg-white px-2 text-sm" bind:value={category} on:change={saveUiState} aria-label="Category filter">
-          {#each categories as item}<option value={item}>{item}</option>{/each}
-        </select>
+  <div class="grid flex-1 grid-cols-1 lg:min-h-0 lg:overflow-hidden lg:grid-cols-[300px_minmax(0,1fr)_380px]">
+    <aside class="flex flex-col border-b border-[#d0d7de] bg-white lg:min-h-0 lg:border-b-0 lg:border-r">
+      <div class="shrink-0 border-b border-[#d0d7de] p-3">
+        <div class="grid grid-cols-2 gap-2">
+          <select class="h-9 rounded border border-[#d0d7de] bg-white px-2 text-sm" bind:value={severity} on:change={saveUiState} aria-label="Severity filter">
+            {#each severities as item}<option value={item}>{item}</option>{/each}
+          </select>
+          <select class="h-9 rounded border border-[#d0d7de] bg-white px-2 text-sm" bind:value={category} on:change={saveUiState} aria-label="Category filter">
+            {#each categories as item}<option value={item}>{item}</option>{/each}
+          </select>
+        </div>
+        <div class="mt-3 flex items-center justify-between gap-2">
+          <button class="inline-flex h-9 items-center gap-2 rounded border border-[#d0d7de] bg-white px-3 text-sm" on:click={() => { showDismissed = !showDismissed; saveUiState(); }} title="Toggle dismissed findings">
+            {#if showDismissed}<Eye size={16} />{:else}<EyeOff size={16} />{/if}
+            Dismissed
+          </button>
+          <button class="inline-flex h-9 items-center gap-2 rounded border border-[#d0d7de] bg-white px-3 text-sm" on:click={() => { mode = mode === "unified" ? "split" : "unified"; saveUiState(); }} title="Toggle diff mode">
+            <SplitSquareHorizontal size={16} /> {mode}
+          </button>
+        </div>
       </div>
-      <div class="mt-3 flex items-center justify-between gap-2">
-        <button class="inline-flex h-9 items-center gap-2 rounded border border-[#d0d7de] bg-white px-3 text-sm" on:click={() => { showDismissed = !showDismissed; saveUiState(); }} title="Toggle dismissed findings">
-          {#if showDismissed}<Eye size={16} />{:else}<EyeOff size={16} />{/if}
-          Dismissed
-        </button>
-        <button class="inline-flex h-9 items-center gap-2 rounded border border-[#d0d7de] bg-white px-3 text-sm" on:click={() => { mode = mode === "unified" ? "split" : "unified"; saveUiState(); }} title="Toggle diff mode">
-          <SplitSquareHorizontal size={16} /> {mode}
-        </button>
-      </div>
-      <nav class="mt-4 space-y-1">
+      <nav class="space-y-1 p-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {#each diff as file}
           <button class="flex w-full items-center justify-between gap-2 rounded px-2 py-2 text-left text-sm hover:bg-[#f6f8fa]" on:click={() => toggleFile(file.newPath)}>
             <span class="flex min-w-0 items-center gap-2">
@@ -205,7 +227,7 @@
       </nav>
     </aside>
 
-    <section class="min-w-0 p-3">
+    <section class="min-w-0 p-3 lg:min-h-0 lg:overflow-y-auto">
       {#each diff as file}
         {#if expanded.has(file.newPath)}
           <article class="mb-3 overflow-hidden rounded border border-[#d0d7de] bg-white">
@@ -247,37 +269,79 @@
       {/each}
     </section>
 
-    <aside class="border-t border-[#d0d7de] bg-white p-3 lg:min-h-[calc(100vh-73px)] lg:border-l lg:border-t-0">
-      <h2 class="text-sm font-semibold">Findings</h2>
-      <div class="mt-3 space-y-2">
+    <aside class="flex flex-col border-t border-[#d0d7de] bg-white lg:min-h-0 lg:border-l lg:border-t-0">
+      <div class="shrink-0 border-b border-[#d0d7de] p-3">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="text-sm font-semibold">Findings</h2>
+          <span class="rounded bg-[#f6f8fa] px-2 py-1 text-xs text-[#57606a]">{visibleFindings.length} visible</span>
+        </div>
+      </div>
+      <div class="p-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <div class="space-y-2">
         {#each visibleFindings as finding}
           <button class={`w-full rounded border p-2 text-left text-sm ${selected?.id === finding.id ? "border-[#0969da] bg-[#ddf4ff]" : "border-[#d0d7de] bg-white"}`} on:click={() => (selectedId = finding.id)}>
             <div class="flex items-center justify-between gap-2">
-              <span class="font-medium">{finding.title}</span>
+              <span class="min-w-0 truncate font-medium">{finding.title}</span>
               <span class="rounded bg-[#f6f8fa] px-1.5 py-0.5 text-xs">{finding.status}</span>
             </div>
-            <div class="mt-1 truncate text-xs text-[#57606a]">{finding.location.file}{finding.location.line ? `:${finding.location.line}` : ""}</div>
+            <div class="mt-1 truncate text-xs text-[#57606a]">{findingAnchor(finding)}</div>
           </button>
         {/each}
-      </div>
+        </div>
       {#if selected}
-        <section class="mt-4 border-t border-[#d0d7de] pt-4">
-          <div class="flex flex-wrap items-center gap-2 text-xs">
-            <span class="rounded bg-red-50 px-2 py-1 text-red-800">{selected.severity}</span>
-            <span class="rounded bg-blue-50 px-2 py-1 text-blue-800">{selected.category}</span>
-            <span class="rounded bg-slate-100 px-2 py-1">{selected.confidence}</span>
+        <section class="mt-4 overflow-hidden rounded border border-[#d0d7de] bg-white">
+          <div class="border-b border-[#d0d7de] bg-[#f6f8fa] p-3">
+            <div class="flex items-start gap-2">
+              <MessageSquare class="mt-0.5 shrink-0 text-[#57606a]" size={17} />
+              <div class="min-w-0">
+                <div class="truncate font-mono text-xs text-[#57606a]">{findingAnchor(selected)}</div>
+                <h3 class="mt-1 text-sm font-semibold leading-5">{selected.title}</h3>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <span class={`rounded px-2 py-1 ring-1 ${severityClass(selected.severity)}`}>{selected.severity}</span>
+              <span class="rounded bg-blue-50 px-2 py-1 text-blue-800 ring-1 ring-blue-200">{selected.category}</span>
+              <span class="rounded bg-slate-100 px-2 py-1 text-slate-700 ring-1 ring-slate-200">{selected.confidence}</span>
+              <span class="rounded bg-[#f6f8fa] px-2 py-1 text-[#57606a] ring-1 ring-[#d0d7de]">{selected.status}</span>
+            </div>
           </div>
-          <h3 class="mt-3 text-base font-semibold">{selected.title}</h3>
-          <p class="mt-2 text-sm leading-6">{selected.claim}</p>
-          {#if selected.suggestion}<p class="mt-2 text-sm leading-6 text-[#57606a]">{selected.suggestion}</p>{/if}
-          <div class="mt-4 grid grid-cols-2 gap-2">
-            <button class="inline-flex h-9 items-center justify-center gap-2 rounded border border-[#d0d7de] bg-white text-sm" on:click={() => copyFinding(selected)} title="Copy finding"><Copy size={16} /> Copy</button>
-            <button class="inline-flex h-9 items-center justify-center gap-2 rounded border border-[#d0d7de] bg-white text-sm" on:click={() => openEditor(selected)} title="Open in editor"><ExternalLink size={16} /> Editor</button>
-            <button class="inline-flex h-9 items-center justify-center gap-2 rounded border border-[#d0d7de] bg-white text-sm" on:click={() => markFixed(selected)} disabled={busy === selected.id} title="Mark fixed"><CheckCircle size={16} /> Fixed</button>
-            <button class="inline-flex h-9 items-center justify-center gap-2 rounded border border-[#d0d7de] bg-white text-sm" on:click={() => dismiss(selected)} disabled={busy === selected.id} title="Dismiss"><XCircle size={16} /> Dismiss</button>
+          <div class="space-y-4 p-3">
+            <div>
+              <h4 class="text-xs font-semibold uppercase text-[#57606a]">Claim</h4>
+              <p class="mt-1 text-sm leading-6">{selected.claim}</p>
+            </div>
+            {#if selected.suggestion}
+              <div class="rounded border border-[#d0d7de] bg-[#f6f8fa] p-3">
+                <h4 class="text-xs font-semibold uppercase text-[#57606a]">Suggested Fix</h4>
+                <p class="mt-1 text-sm leading-6">{selected.suggestion}</p>
+              </div>
+            {/if}
+            {#if selected.evidence?.length}
+              <div>
+                <h4 class="text-xs font-semibold uppercase text-[#57606a]">Evidence</h4>
+                <div class="mt-2 space-y-2">
+                  {#each selected.evidence as evidence}
+                    <div class="rounded border border-[#d0d7de] p-2">
+                      <div class="flex min-w-0 items-center gap-2 text-xs text-[#57606a]">
+                        <FileText size={14} />
+                        <span class="truncate font-mono">{evidenceLabel(evidence)}</span>
+                      </div>
+                      <p class="mt-1 text-sm leading-5">{evidence.explanation}</p>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+            <div class="grid grid-cols-2 gap-2">
+              <button class="inline-flex h-9 items-center justify-center gap-2 rounded border border-[#d0d7de] bg-white text-sm" on:click={() => copyFinding(selected)} title="Copy finding"><Copy size={16} /> Copy</button>
+              <button class="inline-flex h-9 items-center justify-center gap-2 rounded border border-[#d0d7de] bg-white text-sm" on:click={() => openEditor(selected)} title="Open in editor"><ExternalLink size={16} /> Editor</button>
+              <button class="inline-flex h-9 items-center justify-center gap-2 rounded border border-[#d0d7de] bg-white text-sm" on:click={() => markFixed(selected)} disabled={busy === selected.id} title="Mark fixed"><CheckCircle size={16} /> Fixed</button>
+              <button class="inline-flex h-9 items-center justify-center gap-2 rounded border border-[#d0d7de] bg-white text-sm" on:click={() => dismiss(selected)} disabled={busy === selected.id} title="Dismiss"><XCircle size={16} /> Dismiss</button>
+            </div>
           </div>
         </section>
       {/if}
+      </div>
     </aside>
   </div>
 </main>
