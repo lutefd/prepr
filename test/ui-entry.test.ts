@@ -19,3 +19,12 @@ test("keeps review columns independently scrollable on desktop", async () => {
   assert.match(app, /lg:grid-cols-\[300px_minmax\(0,1fr\)_380px\]/);
   assert.equal((app.match(/lg:overflow-y-auto/g) ?? []).length, 3);
 });
+
+test("shows rerun progress while refreshing review data", async () => {
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const app = await fs.readFile(path.resolve(testDir, "../ui/src/App.svelte"), "utf8");
+  assert.match(app, /let rerunStatus = ""/);
+  assert.match(app, /Refreshing review/);
+  assert.match(app, /animate-spin/);
+  assert.match(app, /await load\(true\)/);
+});

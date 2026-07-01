@@ -15,7 +15,7 @@
     SplitSquareHorizontal,
     XCircle
   } from "@lucide/svelte";
-  import type { DiffFile, DiffLine, EvidenceRef, ReviewFinding, RunMetadata } from "../../src/shared/types";
+  import type { DiffFile, DiffLine, EvidenceRef, RerunJob, ReviewFinding, RunMetadata } from "../../src/shared/types";
 
   let metadata: RunMetadata | undefined;
   let diff: DiffFile[] = [];
@@ -28,6 +28,7 @@
   let expanded = new Set<string>();
   let busy = "";
   let error = "";
+  let rerunStatus = "";
 
   const severities = ["all", "critical", "high", "medium", "low", "info"];
   const categories = ["all", "bug", "security", "performance", "maintainability", "test", "docs", "style"];
@@ -43,15 +44,16 @@
 
   load();
 
-  async function load() {
+  async function load(preserveUi = false) {
     try {
       error = "";
       const [runRes, diffRes, findingsRes] = await Promise.all([fetch("/api/run"), fetch("/api/diff"), fetch("/api/findings")]);
+      if (!runRes.ok || !diffRes.ok || !findingsRes.ok) throw new Error("Unable to load review data.");
       metadata = await runRes.json();
       diff = await diffRes.json();
       findings = await findingsRes.json();
-      expanded = new Set(diff.map((file) => file.newPath));
-      selectedId = findings[0]?.id ?? "";
+      if (!preserveUi || !expanded.size) expanded = new Set(diff.map((file) => file.newPath));
+      selectedId = findings.some((finding) => finding.id === selectedId) ? selectedId : findings[0]?.id ?? "";
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
     }
@@ -96,19 +98,31 @@
 
   async function rerun() {
     busy = "rerun";
+    error = "";
+    rerunStatus = "Queued";
     try {
       const job = await post("/api/rerun");
       await pollJob(job.id);
-      await load();
+      rerunStatus = "Refreshing";
+      await load(true);
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : String(caught);
     } finally {
       busy = "";
+      rerunStatus = "";
     }
   }
 
   async function pollJob(id: string) {
     while (true) {
-      const job = await (await fetch(`/api/jobs/${id}`)).json();
-      if (job.status === "done") return;
+      const response = await fetch(`/api/jobs/${id}`);
+      if (!response.ok) throw new Error((await response.json()).error ?? response.statusText);
+      const job: RerunJob = await response.json();
+      rerunStatus = job.status === "queued" ? "Queued" : "Reviewing";
+      if (job.status === "done") {
+        rerunStatus = "Refreshing";
+        return;
+      }
       if (job.status === "failed") throw new Error(job.error ?? "Rerun failed");
       await new Promise((resolve) => setTimeout(resolve, 900));
     }
@@ -182,10 +196,10 @@
       <div class="flex flex-wrap items-center gap-2">
         <span class="rounded border border-[#d0d7de] bg-[#f6f8fa] px-2 py-1 text-sm">{metadata?.counts.open ?? 0} open</span>
         <span class="rounded border border-[#d0d7de] bg-[#f6f8fa] px-2 py-1 text-sm">{metadata?.counts.dismissed ?? 0} dismissed</span>
-        <button class="inline-flex h-9 items-center gap-2 rounded border border-[#d0d7de] bg-white px-3 text-sm hover:bg-[#f6f8fa]" on:click={rerun} disabled={busy === "rerun"} title="Rerun review">
-          <RefreshCw size={16} /> Rerun
+        <button class="inline-flex h-9 items-center gap-2 rounded border border-[#d0d7de] bg-white px-3 text-sm hover:bg-[#f6f8fa] disabled:cursor-wait disabled:opacity-70" on:click={rerun} disabled={busy === "rerun"} title="Rerun review">
+          <RefreshCw class={busy === "rerun" ? "animate-spin" : ""} size={16} /> {busy === "rerun" ? rerunStatus : "Rerun"}
         </button>
-        <button class="inline-flex h-9 items-center gap-2 rounded border border-[#d0d7de] bg-white px-3 text-sm hover:bg-[#f6f8fa]" on:click={exportRun} title="Export review">
+        <button class="inline-flex h-9 items-center gap-2 rounded border border-[#d0d7de] bg-white px-3 text-sm hover:bg-[#f6f8fa]" on:click={exportRun} disabled={busy === "rerun"} title="Export review">
           <Download size={16} /> Export
         </button>
       </div>
@@ -344,4 +358,13 @@
       </div>
     </aside>
   </div>
+  {#if busy === "rerun"}
+    <div class="fixed inset-0 z-50 grid place-items-center bg-white/85 px-6 backdrop-blur-sm">
+      <div class="w-full max-w-sm rounded border border-[#d0d7de] bg-white p-5 text-center shadow-lg">
+        <RefreshCw class="mx-auto animate-spin text-[#0969da]" size={28} />
+        <h2 class="mt-3 text-base font-semibold">Refreshing review</h2>
+        <p class="mt-1 text-sm text-[#57606a]">{rerunStatus || "Starting"}</p>
+      </div>
+    </div>
+  {/if}
 </main>
