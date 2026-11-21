@@ -210,6 +210,7 @@ export interface ReviewRun {
   diff: DiffFile[];
   findings: ReviewFinding[];
   summary: string;
+  checks?: CheckResult[];
   coverage?: CoverageReceipt;
   state?: RunState;
   uiState?: Record<string, unknown>;

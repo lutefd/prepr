@@ -116,6 +116,7 @@ export async function createReviewRun(options: CreateRunOptions): Promise<{ run:
       diff,
       findings,
       summary: workflow.verification.summary,
+      checks,
       coverage: workflow.coverage,
       state: { runId: id, status: finalStatus, updatedAt: new Date().toISOString() },
       uiState: {}
