@@ -43,13 +43,33 @@ async function main(): Promise<void> {
     agentName: options.noAgent ? "none" : options.agent,
     runner
   });
+  const checks = run.checks ?? [];
+  const failedChecks = checks.filter((check) => check.status !== "passed");
+  const status = run.state?.status ?? (failedChecks.length > 0 ? "completed_with_check_failures" : "completed");
+  const hasCheckFailures = status !== "completed" || failedChecks.length > 0;
+  if (hasCheckFailures) process.exitCode = 1;
+
   if (options.json) {
     const githubComments = path.join(runDir, "exports", "github-comments.md");
     console.log(
       JSON.stringify(
         {
+          status,
           run: run.metadata,
           counts: run.metadata.counts,
+          checks: {
+            total: checks.length,
+            passed: checks.length - failedChecks.length,
+            failed: failedChecks.length,
+            failedIds: failedChecks.map((check) => check.id),
+            path: path.join(runDir, "checks.json"),
+            results: checks.map((check) => ({
+              id: check.id,
+              status: check.status,
+              exitCode: check.exitCode,
+              durationMs: check.durationMs
+            }))
+          },
           runDir,
           exports: {
             "review-summary.md": path.join(runDir, "exports", "review-summary.md"),
@@ -70,6 +90,9 @@ async function main(): Promise<void> {
       )
     );
     return;
+  }
+  if (hasCheckFailures) {
+    console.warn(`prepr completed with failed checks: ${failedChecks.map((check) => check.id).join(", ")}`);
   }
   const { url } = await startServer({
     repoRoot: run.metadata.repoRoot,
